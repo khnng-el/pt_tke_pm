@@ -10,6 +10,23 @@ from ai_agent.prompts import MANAGEMENT_PROMPT
 from ai_agent.tools.db_tools import get_booking_info, cancel_booking
 
 
+def _format_vnd(value: int | float | None) -> str:
+    if value is None:
+        return "Liên hệ"
+    return f"{float(value):,.0f}₫"
+
+
+def _status_label(status: str | None) -> str:
+    labels = {
+        "pending": "Đang chờ",
+        "success": "Thành công",
+        "failed": "Thất bại",
+        "confirmed": "Đã xác nhận",
+        "cancelled": "Đã hủy",
+    }
+    return labels.get((status or "").lower(), status or "Chưa cập nhật")
+
+
 def management_node(state: BookingState) -> dict:
     """
     Node quản lý booking: tra cứu hoặc hủy.
@@ -37,31 +54,30 @@ def management_node(state: BookingState) -> dict:
     if wants_cancel and user_id:
         result = cancel_booking(booking_id, user_id)
         if "error" in result:
-            return {"messages": [AIMessage(content=f"❌ {result['error']}")]}
+            return {"messages": [AIMessage(content=f"Không thể hủy booking: {result['error']}")]}
         return {
-            "messages": [AIMessage(content=f"✅ {result['message']}")],
+            "messages": [AIMessage(content=result["message"])],
             "lookup_booking_id": booking_id
         }
 
     # Tra cứu thông tin
     info = get_booking_info(booking_id)
     if "error" in info:
-        return {"messages": [AIMessage(content=f"❌ {info['error']}")]}
+        return {"messages": [AIMessage(content=f"Không tìm thấy booking: {info['error']}")]}
 
-    # Format thông tin đẹp
-    status_emoji = {"pending": "⏳", "success": "✅", "failed": "❌"}.get(info["status"], "❓")
+    status_text = _status_label(info["status"])
     msg = (
-        f"📋 **Thông tin Booking #{info['booking_id']}**\n\n"
-        f"🏨 {info['hotel_name']} - {info['room_type']}\n"
-        f"📅 {info['check_in']} → {info['check_out']}\n"
-        f"🛏️ Số phòng: {info['num_rooms']}\n"
-        f"💰 Tổng tiền: {info['total_price']:,.0f} VND\n"
-        f"{status_emoji} Trạng thái: **{info['status']}**\n"
-        f"🕐 Ngày đặt: {info['created_at']}\n"
+        f"**Thông tin Booking #{info['booking_id']}**\n\n"
+        f"Khách sạn: {info['hotel_name']} - {info['room_type']}\n"
+        f"Thời gian: {info['check_in']} → {info['check_out']}\n"
+        f"Số phòng: {info['num_rooms']}\n"
+        f"Tổng tiền: **{_format_vnd(info['total_price'])}**\n"
+        f"Trạng thái: **{status_text}**\n"
+        f"Ngày đặt: {info['created_at']}\n"
     )
 
     if info.get("payment_status"):
-        msg += f"💳 Thanh toán: {info['payment_method']} - {info['payment_status']}\n"
+        msg += f"Thanh toán: {info['payment_method']} - {info['payment_status']}\n"
 
     if info["status"] == "pending":
         msg += "\n_Bạn có muốn **hủy** booking này không?_"

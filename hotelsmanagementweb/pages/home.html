@@ -683,7 +683,7 @@
         }
     </script>
 
-    <!-- ===== AI Booking Assistant Chatbot Widget ===== -->
+    <!-- ===== Booking Assistant Chatbot Widget ===== -->
     <style>
         /* Chatbot Toggle Container */
         .chatbot-toggle-wrapper {
@@ -697,16 +697,16 @@
         }
 
         .chatbot-label {
-            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            background: linear-gradient(135deg, #1F3F8B, #3252DF);
             color: white;
             font-size: 12.5px;
             font-weight: 600;
             padding: 8px 16px;
             border-radius: 20px;
             white-space: nowrap;
-            box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+            box-shadow: 0 4px 16px rgba(50, 82, 223, 0.28);
             font-family: 'Poppins', sans-serif;
-            letter-spacing: 0.3px;
+            letter-spacing: 0;
             animation: label-fade-in 0.5s ease-out;
             pointer-events: none;
         }
@@ -721,10 +721,10 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            background: linear-gradient(135deg, #1F3F8B, #3252DF);
             border: none;
             cursor: pointer;
-            box-shadow: 0 6px 24px rgba(79, 70, 229, 0.45), 0 0 0 0 rgba(79, 70, 229, 0.3);
+            box-shadow: 0 6px 24px rgba(50, 82, 223, 0.38), 0 0 0 0 rgba(50, 82, 223, 0.26);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -735,13 +735,13 @@
         }
 
         @keyframes chatbot-pulse {
-            0%, 100% { box-shadow: 0 6px 24px rgba(79, 70, 229, 0.45), 0 0 0 0 rgba(79, 70, 229, 0.25); }
-            50% { box-shadow: 0 6px 24px rgba(79, 70, 229, 0.45), 0 0 0 10px rgba(79, 70, 229, 0); }
+            0%, 100% { box-shadow: 0 6px 24px rgba(50, 82, 223, 0.38), 0 0 0 0 rgba(50, 82, 223, 0.24); }
+            50% { box-shadow: 0 6px 24px rgba(50, 82, 223, 0.38), 0 0 0 10px rgba(50, 82, 223, 0); }
         }
 
         #chatbot-toggle:hover {
             transform: scale(1.12) rotate(-5deg);
-            box-shadow: 0 8px 32px rgba(79, 70, 229, 0.55);
+            box-shadow: 0 8px 32px rgba(50, 82, 223, 0.46);
             animation: none;
         }
 
@@ -805,7 +805,7 @@
 
         /* Header */
         .chatbot-header {
-            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #A855F7 100%);
+            background: linear-gradient(135deg, #1F3F8B 0%, #3252DF 100%);
             color: white;
             padding: 18px 20px;
             display: flex;
@@ -813,17 +813,6 @@
             gap: 14px;
             position: relative;
             overflow: hidden;
-        }
-
-        .chatbot-header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -30%;
-            width: 200px;
-            height: 200px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            border-radius: 50%;
         }
 
         .chatbot-header .avatar {
@@ -846,6 +835,11 @@
             fill: white;
         }
 
+        .chatbot-header .avatar i {
+            font-size: 19px;
+            color: white;
+        }
+
         .chatbot-header .avatar .status-dot {
             position: absolute;
             bottom: 0;
@@ -854,7 +848,7 @@
             height: 12px;
             border-radius: 50%;
             background: #34D399;
-            border: 2px solid #4F46E5;
+            border: 2px solid #1F3F8B;
             animation: status-blink 2s ease-in-out infinite;
         }
 
@@ -867,7 +861,7 @@
             margin: 0;
             font-size: 15px;
             font-weight: 600;
-            letter-spacing: 0.2px;
+            letter-spacing: 0;
         }
 
         .chatbot-header .info p {
@@ -927,7 +921,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            background: linear-gradient(180deg, #F5F3FF 0%, #F8F9FE 100%);
+            background: #F8FAFC;
         }
 
         .chatbot-messages::-webkit-scrollbar {
@@ -942,9 +936,9 @@
         .chat-msg {
             max-width: 85%;
             padding: 11px 15px;
-            border-radius: 18px;
+            border-radius: 12px;
             font-size: 13.5px;
-            line-height: 1.55;
+            line-height: 1.65;
             word-wrap: break-word;
             position: relative;
         }
@@ -957,9 +951,36 @@
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
 
+        .chat-msg.bot a {
+            color: #3252DF;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .chat-msg.bot a:hover {
+            text-decoration: underline;
+        }
+
+        .chat-msg.bot a[href^="/hotel/"] {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 6px;
+            padding: 8px 11px;
+            border-radius: 8px;
+            background: #EDF2FF;
+            color: #1F3F8B;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .chat-msg.bot a[href^="/hotel/"]:hover {
+            background: #DBE6FF;
+            text-decoration: none;
+        }
+
         .chat-msg.user {
             align-self: flex-end;
-            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            background: linear-gradient(135deg, #1F3F8B, #3252DF);
             color: white;
             border-bottom-right-radius: 4px;
             box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
@@ -967,8 +988,8 @@
 
         .chat-msg.system {
             align-self: center;
-            background: #EDE9FE;
-            color: #6D28D9;
+            background: #EDF2FF;
+            color: #1F3F8B;
             font-size: 12px;
             padding: 6px 14px;
             border-radius: 10px;
@@ -1060,7 +1081,7 @@
             }
             30% {
                 transform: translateY(-7px);
-                background: #7C3AED;
+                background: #3252DF;
             }
         }
 
@@ -1069,7 +1090,7 @@
             display: flex;
             align-items: center;
             padding: 14px 16px;
-            border-top: 1px solid #EDE9FE;
+            border-top: 1px solid #E6ECF8;
             background: white;
             gap: 10px;
         }
@@ -1087,7 +1108,7 @@
         }
 
         .chatbot-input input:focus {
-            border-color: #7C3AED;
+            border-color: #3252DF;
             background: white;
             box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
         }
@@ -1097,7 +1118,7 @@
         }
 
         .chatbot-input button {
-            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            background: linear-gradient(135deg, #1F3F8B, #3252DF);
             color: white;
             border: none;
             width: 42px;
@@ -1130,7 +1151,7 @@
             gap: 8px;
             flex-wrap: wrap;
             padding: 4px 16px 10px 16px;
-            background: linear-gradient(180deg, #F5F3FF 0%, #F8F9FE 100%);
+            background: #F8FAFC;
         }
 
         .quick-action-btn {
@@ -1139,7 +1160,7 @@
             border-radius: 20px;
             padding: 7px 14px;
             font-size: 12px;
-            color: #6D28D9;
+            color: #1F3F8B;
             cursor: pointer;
             transition: all 0.25s;
             font-family: 'Poppins', sans-serif;
@@ -1150,7 +1171,7 @@
         }
 
         .quick-action-btn:hover {
-            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            background: linear-gradient(135deg, #1F3F8B, #3252DF);
             color: white;
             border-color: transparent;
             transform: translateY(-1px);
@@ -1176,8 +1197,8 @@
 
     <!-- Chatbot Toggle Button -->
     <div class="chatbot-toggle-wrapper" id="chatbot-toggle-wrapper">
-        <span class="chatbot-label" id="chatbot-label">🤖 Hỗ trợ AI</span>
-        <button id="chatbot-toggle" onclick="toggleChatbot()" title="AI Booking Assistant">
+        <span class="chatbot-label" id="chatbot-label">Hỗ trợ đặt phòng</span>
+        <button id="chatbot-toggle" onclick="toggleChatbot()" title="Trợ lý đặt phòng">
             <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
             <span class="badge" id="chatbot-badge" style="display:none;">1</span>
         </button>
@@ -1187,11 +1208,11 @@
     <div id="chatbot-window">
         <div class="chatbot-header">
             <div class="avatar">
-                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                <i class="fas fa-headset"></i>
                 <span class="status-dot"></span>
             </div>
             <div class="info">
-                <h4>AI Booking Assistant</h4>
+                <h4>Trợ lý đặt phòng</h4>
                 <p><span class="dot"></span> Đang hoạt động</p>
             </div>
             <button class="close-btn" onclick="toggleChatbot()">
@@ -1201,17 +1222,17 @@
 
         <div class="chatbot-messages" id="chatbot-messages">
             <div class="chat-msg bot">
-                Xin chào! 👋 Tôi là trợ lý AI của <b>HaNoi Booking</b>.<br><br>
+                Xin chào! Tôi là trợ lý đặt phòng của <b>HaNoi Booking</b>.<br><br>
                 Tôi có thể giúp bạn:<br>
-                🏨 Tìm và đặt phòng khách sạn<br>
-                📍 Gợi ý khách sạn gần bạn<br>
-                📋 Kiểm tra trạng thái đặt phòng<br><br>
+                - Tìm và đặt phòng khách sạn<br>
+                - Gợi ý khách sạn gần bạn<br>
+                - Kiểm tra trạng thái đặt phòng<br><br>
                 Bạn cần tôi giúp gì ạ?
             </div>
         </div>
 
         <div class="quick-actions" id="quick-actions">
-            <button class="quick-action-btn" onclick="quickAction(' Tìm khách sạn gần tôi')"><i class="fas fa-map-marker-alt"></i> Gần tôi</button>
+            <button class="quick-action-btn" onclick="quickAction('Tìm khách sạn gần tôi')"><i class="fas fa-map-marker-alt"></i> Gần tôi</button>
             <button class="quick-action-btn" onclick="quickAction('Tôi muốn đặt phòng')"><i class="fas fa-calendar-check"></i> Đặt phòng</button>
             <button class="quick-action-btn" onclick="quickAction('Kiểm tra booking')"><i class="fas fa-search"></i> Tra cứu</button>
         </div>
@@ -1228,7 +1249,7 @@
     </div>
 
     <script>
-        // ===== AI Chatbot Widget Logic =====
+        // ===== Booking Chatbot Widget Logic =====
         let chatbotUserLat = null;
         let chatbotUserLng = null;
         let chatHistory = []; // Lưu lịch sử hội thoại
@@ -1251,14 +1272,40 @@
             }
         }
 
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatChatbotText(text) {
+            let html = escapeHtml(text);
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g, function (_, label, url) {
+                const target = url.startsWith('/') ? '_self' : '_blank';
+                return `<a href="${url}" target="${target}" rel="noopener">${label}</a>`;
+            });
+            html = html.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g, function (_, prefix, url) {
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+            });
+            html = html.replace(/(^|[\s>])(\/hotel\/\d+)\b/g, function (_, prefix, url) {
+                return `${prefix}<a href="${url}" target="_self">${url}</a>`;
+            });
+            html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            return html.replace(/\n/g, '<br>');
+        }
+
         function addMessage(text, type) {
             const container = document.getElementById('chatbot-messages');
             const msg = document.createElement('div');
             msg.className = `chat-msg ${type}`;
-            // Parse markdown-like formatting
-            let html = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            html = html.replace(/\n/g, '<br>');
-            msg.innerHTML = html;
+            if (type === 'bot') {
+                msg.innerHTML = formatChatbotText(text);
+            } else {
+                msg.textContent = text;
+            }
             container.appendChild(msg);
             container.scrollTop = container.scrollHeight;
 
@@ -1291,7 +1338,7 @@
             prompt.className = 'location-prompt';
             prompt.id = 'location-prompt';
             prompt.innerHTML = `
-                <p> Để gợi ý khách sạn gần nhất, tôi cần quyền truy cập vị trí của bạn.</p>
+                <p>Để gợi ý khách sạn và phòng gần bạn nhất, tôi cần quyền truy cập vị trí của bạn.</p>
                 <button class="btn-share" onclick="shareLocation()">
                     <i class="fas fa-map-marker-alt"></i> Chia sẻ vị trí
                 </button>
@@ -1302,7 +1349,7 @@
         }
 
         function requestLocationAndSearch() {
-            addMessage(' Tìm khách sạn gần tôi', 'user');
+            addMessage('Tìm khách sạn gần tôi', 'user');
             showLocationPrompt();
         }
 
@@ -1311,11 +1358,11 @@
             if (prompt) prompt.remove();
 
             if (!navigator.geolocation) {
-                addMessage(' Trình duyệt của bạn không hỗ trợ định vị.', 'bot');
+                addMessage('Trình duyệt của bạn không hỗ trợ định vị.', 'bot');
                 return;
             }
 
-            addMessage(' Đang xác định vị trí của bạn...', 'system');
+            addMessage('Đang xác định vị trí của bạn...', 'system');
 
             navigator.geolocation.getCurrentPosition(
                 function (position) {
@@ -1325,7 +1372,7 @@
                     const msgs = document.querySelectorAll('.chat-msg.system');
                     msgs.forEach(m => { if (m.textContent.includes('xác định')) m.remove(); });
 
-                    addMessage(' Đã nhận vị trí của bạn!', 'system');
+                    addMessage('Đã nhận vị trí của bạn. Các gợi ý tiếp theo sẽ ưu tiên từ gần đến xa.', 'system');
 
                     // Gửi với cờ is_nearby = true
                     sendChatToAPI('Tìm khách sạn gần vị trí hiện tại của tôi', true);
@@ -1334,7 +1381,7 @@
                     const msgs = document.querySelectorAll('.chat-msg.system');
                     msgs.forEach(m => { if (m.textContent.includes('xác định')) m.remove(); });
 
-                    let errMsg = ' Không thể xác định vị trí. ';
+                    let errMsg = 'Không thể xác định vị trí. ';
                     switch (error.code) {
                         case error.PERMISSION_DENIED:
                             errMsg += 'Bạn đã từ chối chia sẻ vị trí.';
@@ -1369,10 +1416,13 @@
                     history: chatHistory,  // Gửi kèm lịch sử hội thoại
                 };
 
-                // Chỉ gửi tọa độ khi là yêu cầu nearby
-                if (isNearby && chatbotUserLat && chatbotUserLng) {
+                if (chatbotUserLat && chatbotUserLng) {
                     body.lat = chatbotUserLat;
                     body.lng = chatbotUserLng;
+                }
+
+                // Chỉ bật luồng nearby khi người dùng thật sự yêu cầu tìm gần vị trí hiện tại
+                if (isNearby && chatbotUserLat && chatbotUserLng) {
                     body.is_nearby = true;
                 }
 
@@ -1386,7 +1436,7 @@
                 addMessage(data.reply, 'bot');
             } catch (err) {
                 hideTyping();
-                addMessage('❌ Lỗi kết nối. Vui lòng thử lại.', 'bot');
+                addMessage('Lỗi kết nối. Vui lòng thử lại.', 'bot');
             }
 
             document.getElementById('chatbot-send-btn').disabled = false;
@@ -1409,7 +1459,7 @@
                 return;
             }
 
-            // Gửi API — KHÔNG gửi tọa độ trừ khi rõ ràng là nearby query
+            // Gửi API; nếu người dùng đã chia sẻ vị trí, tọa độ sẽ được dùng để sắp xếp gợi ý.
             await sendChatToAPI(message, isNearbyQuery);
             document.getElementById('chatbot-input-field').focus();
         }

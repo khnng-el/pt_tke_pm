@@ -2417,7 +2417,7 @@ def delete_booking(booking_id):
         app.logger.error(f"[DELETE BOOKING] Exception: {str(e)} | booking_id={booking_id}, user_id={current_user.user_id}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-# ===== AI Booking Assistant API =====
+# ===== Booking Assistant API =====
 import logging as _logging
 _logging.getLogger('sqlalchemy.engine').setLevel(_logging.WARNING)
 _logging.getLogger('sqlalchemy').setLevel(_logging.WARNING)
@@ -2444,9 +2444,41 @@ def get_ai_chat_handler():
         app.logger.warning(f"AI assistant is unavailable: {exc}")
         return None
 
+
+def get_hotel_match_fallback_reply(message, history_data=None, user_lat=None, user_lng=None):
+    """Return DB-based hotel recommendations when the LLM is unavailable."""
+    try:
+        from ai_agent.nodes.booking import _format_hotel_matches, _is_description_match_request
+        from ai_agent.tools.db_tools import search_hotels_by_description
+
+        history_text = "\n".join(
+            item.get('content', '')
+            for item in (history_data or [])
+            if item.get('role') == 'user'
+        )
+        description = "\n".join(part for part in [history_text, message] if part).strip()
+        if not _is_description_match_request(description):
+            return None
+
+        matches = search_hotels_by_description(
+            description=description,
+            limit=5,
+            user_lat=user_lat,
+            user_lng=user_lng,
+        )
+        if matches and matches[0].get("no_match"):
+            return matches[0]["message"]
+        if matches and "error" in matches[0]:
+            return f"Lỗi: {matches[0]['error']}"
+        return _format_hotel_matches(matches, has_dates=False, description=description)
+    except Exception as exc:
+        app.logger.error(f"[AI CHAT FALLBACK] Hotel match failed: {exc}")
+        return None
+
+
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    """API endpoint cho AI Booking Assistant chatbot."""
+    """API endpoint cho chatbot trợ lý đặt phòng."""
     data = request.get_json() or {}
     message = data.get('message', '').strip()
     user_lat = data.get('lat')
@@ -2480,11 +2512,20 @@ def api_chat():
     try:
         ai_chat = get_ai_chat_handler()
         if ai_chat is None:
+            fallback_reply = get_hotel_match_fallback_reply(message, history_data, user_lat, user_lng)
+            if fallback_reply:
+                return jsonify({"reply": fallback_reply})
             return jsonify({
-                "reply": "Trợ lý AI hiện chưa sẵn sàng. Bạn vẫn có thể dùng các chức năng đặt phòng thông thường."
+                "reply": "Trợ lý đặt phòng hiện chưa sẵn sàng. Bạn vẫn có thể dùng các chức năng đặt phòng thông thường."
             })
 
-        reply = ai_chat(message=message, user_id=user_id, history=history)
+        reply = ai_chat(
+            message=message,
+            user_id=user_id,
+            history=history,
+            user_lat=user_lat,
+            user_lng=user_lng,
+        )
         # Loại bỏ tọa độ GPS ra khỏi câu trả lời
         import re
         reply = re.sub(r'\(vị trí:?\s*[\d\.\-]+,\s*[\d\.\-]+\)', '', reply)
@@ -2493,12 +2534,15 @@ def api_chat():
         return jsonify({"reply": reply})
     except Exception as e:
         app.logger.error(f"[AI CHAT] Error: {str(e)}")
+        fallback_reply = get_hotel_match_fallback_reply(message, history_data, user_lat, user_lng)
+        if fallback_reply:
+            return jsonify({"reply": fallback_reply})
         if "API_KEY_IP_ADDRESS_BLOCKED" in str(e) or "PERMISSION_DENIED" in str(e):
             return jsonify({
-                "reply": "AI đang bị chặn bởi cấu hình API key hiện tại. Vui lòng cập nhật khóa Gemini hoặc bỏ giới hạn IP."
+                "reply": "Trợ lý đặt phòng đang bị chặn bởi cấu hình API key hiện tại. Vui lòng cập nhật khóa Gemini hoặc bỏ giới hạn IP."
             })
         return jsonify({
-            "reply": "Xin lỗi, trợ lý AI đang tạm thời không khả dụng. Bạn vẫn có thể đặt phòng và thanh toán bình thường."
+            "reply": "Xin lỗi, trợ lý đặt phòng đang tạm thời không khả dụng. Bạn vẫn có thể đặt phòng và thanh toán bình thường."
         })
 
 if __name__ == '__main__':

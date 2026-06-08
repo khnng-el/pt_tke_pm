@@ -10,6 +10,12 @@ from ai_agent.state import BookingState
 from ai_agent.tools.location_tools import find_nearest_hotels
 
 
+def _format_vnd(value: int | float | None) -> str:
+    if value is None:
+        return "Liên hệ"
+    return f"{float(value):,.0f}₫"
+
+
 def nearby_node(state: BookingState) -> dict:
     """
     Node xử lý tìm khách sạn gần nhất.
@@ -51,11 +57,12 @@ Không giải thích, chỉ trả JSON."""
     # Nếu vẫn chưa có tọa độ → hỏi lại
     if not user_lat or not user_lng:
         msg = (
-            "📍 Để tìm khách sạn gần bạn nhất, tôi cần biết vị trí của bạn.\n\n"
+            "**Tìm khách sạn gần bạn**\n\n"
+            "Tôi cần biết vị trí của bạn để gợi ý chính xác hơn.\n\n"
             "Bạn có thể cung cấp tọa độ theo một trong các cách sau:\n"
-            "1️⃣ Nhập tọa độ: `21.0285, 105.8542` (vĩ độ, kinh độ)\n"
-            "2️⃣ Cho biết tên thành phố/khu vực bạn đang ở\n\n"
-            "_💡 Mẹo: Mở Google Maps → nhấn giữ vào vị trí → copy tọa độ._"
+            "1. Nhập tọa độ: `21.0285, 105.8542` (vĩ độ, kinh độ)\n"
+            "2. Cho biết tên thành phố hoặc khu vực bạn đang ở\n\n"
+            "_Mẹo: Mở Google Maps, nhấn giữ vào vị trí rồi copy tọa độ._"
         )
         return {"messages": [AIMessage(content=msg)]}
 
@@ -63,21 +70,23 @@ Không giải thích, chỉ trả JSON."""
     results = find_nearest_hotels(user_lat, user_lng, top_n=3)
 
     if results and "error" in results[0]:
-        return {"messages": [AIMessage(content=f"❌ {results[0]['error']}")]}
+        return {"messages": [AIMessage(content=f"Lỗi: {results[0]['error']}")]}
 
     # Format kết quả
-    msg = f"📍 **3 khách sạn gần bạn nhất** (vị trí: {user_lat}, {user_lng}):\n\n"
+    msg = "**3 khách sạn gần bạn nhất**\n\n"
     for i, h in enumerate(results, 1):
-        price_text = f"{h['min_price']:,} VND/đêm" if h['min_price'] else "Liên hệ"
-        rating_text = f"⭐ {h['rating']}" if h['rating'] else "Chưa đánh giá"
+        price_text = f"{_format_vnd(h['min_price'])}/ night" if h['min_price'] else "Liên hệ"
+        rating_text = h["rating"] if h["rating"] else "Chưa đánh giá"
         msg += (
-            f"**{i}. {h['hotel_name']}** — 📏 {h['distance_km']} km\n"
-            f"   📍 {h['address']}\n"
-            f"   📞 {h['phone']} | {rating_text}\n"
-            f"   💰 Từ {price_text}\n\n"
+            f"**{i}. {h['hotel_name']}**\n"
+            f"Khoảng cách: {h['distance_km']} km\n"
+            f"Vị trí: {h['address']}\n"
+            f"Liên hệ: {h['phone']} · Đánh giá: {rating_text}\n"
+            f"Giá từ: {price_text}\n"
+            f"[Xem chi tiết khách sạn](/hotel/{h['hotel_id']})\n\n"
         )
 
-    msg += "Bạn muốn đặt phòng tại khách sạn nào? Tôi sẽ giúp bạn ngay! 🏨"
+    msg += "Bạn muốn đặt phòng tại khách sạn nào? Tôi sẽ hỗ trợ kiểm tra phòng trống ngay."
 
     return {
         "messages": [AIMessage(content=msg)],

@@ -25,6 +25,8 @@ class BookingState(TypedDict):
     
     # Kết quả truy vấn DB
     suggested_rooms: Optional[List[dict]]
+    pending_room_id: Optional[int]
+    booking_confirmed: Optional[bool]
     
     # Kết quả đặt phòng
     booking_id: Optional[int]

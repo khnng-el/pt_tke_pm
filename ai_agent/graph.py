@@ -35,11 +35,12 @@ def greeting_node(state: BookingState) -> dict:
 def booking_router(state: BookingState) -> str:
     """
     Conditional edge SAU booking_node:
-    - Nếu đã có suggested_rooms → chuyển sang confirm_booking
-    - Nếu chưa → kết thúc (chờ tin nhắn tiếp theo)
+    - Chỉ chuyển sang confirm_booking khi người dùng đã xác nhận đặt phòng.
+    - Chọn phòng chỉ dừng ở bước hỏi xác nhận, không tự tạo booking.
     """
-    if state.get("suggested_rooms"):
+    if state.get("booking_confirmed") and state.get("pending_room_id"):
         return "confirm_booking"
+
     return END
 
 
@@ -106,7 +107,8 @@ def get_graph():
     return _compiled_graph
 
 
-def chat(message: str, user_id: int = None, history: list = None) -> str:
+def chat(message: str, user_id: int = None, history: list = None,
+         user_lat: float = None, user_lng: float = None) -> str:
     """
     Hàm API chính để gọi chatbot.
     
@@ -114,6 +116,8 @@ def chat(message: str, user_id: int = None, history: list = None) -> str:
         message: Tin nhắn người dùng.
         user_id: ID người dùng (từ Flask session).
         history: Lịch sử tin nhắn BaseMessage (tùy chọn).
+        user_lat: Vĩ độ người dùng nếu frontend đã có quyền vị trí.
+        user_lng: Kinh độ người dùng nếu frontend đã có quyền vị trí.
     
     Returns:
         Chuỗi text trả lời.
@@ -135,12 +139,14 @@ def chat(message: str, user_id: int = None, history: list = None) -> str:
         "room_type": None,
         "hotel_name": None,
         "suggested_rooms": None,
+        "pending_room_id": None,
+        "booking_confirmed": False,
         "booking_id": None,
         "payment_url": None,
         "user_id": user_id,
         "lookup_booking_id": None,
-        "user_lat": None,
-        "user_lng": None,
+        "user_lat": user_lat,
+        "user_lng": user_lng,
     }
 
     # Chạy đồ thị

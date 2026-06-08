@@ -11,7 +11,7 @@
     }
 
     .ai-chat-label {
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        background: linear-gradient(135deg, #1f3f8b, #3252df);
         color: #fff;
         font-size: 12.5px;
         font-weight: 700;
@@ -28,7 +28,7 @@
         border: 0;
         border-radius: 50%;
         color: #fff;
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        background: linear-gradient(135deg, #1f3f8b, #3252df);
         box-shadow: 0 12px 30px rgba(79, 70, 229, 0.38);
         cursor: pointer;
         display: grid;
@@ -85,7 +85,7 @@
     }
 
     .ai-chat-head {
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        background: linear-gradient(135deg, #1f3f8b, #3252df);
         color: #fff;
         padding: 16px 18px;
         display: flex;
@@ -99,6 +99,17 @@
         align-items: center;
         gap: 10px;
         min-width: 0;
+    }
+
+    .ai-chat-title > i {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        flex: 0 0 auto;
     }
 
     .ai-chat-title strong {
@@ -145,20 +156,51 @@
 
     .ai-chat-bubble {
         max-width: 82%;
-        padding: 10px 13px;
-        border-radius: 14px;
-        font-size: 13px;
-        line-height: 1.55;
+        padding: 12px 14px;
+        border-radius: 12px;
+        font-size: 13.2px;
+        line-height: 1.65;
         color: #152c5b;
         background: #fff;
         box-shadow: 0 2px 8px rgba(21, 44, 91, 0.08);
         word-break: break-word;
     }
 
+    .ai-chat-bubble strong {
+        color: #152c5b;
+        font-weight: 700;
+    }
+
     .ai-chat-message.user .ai-chat-bubble {
         color: #fff;
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        background: linear-gradient(135deg, #1f3f8b, #3252df);
         box-shadow: none;
+    }
+
+    .ai-chat-bubble a {
+        color: #1f3f8b;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .ai-chat-bubble a:hover {
+        text-decoration: underline;
+    }
+
+    .ai-chat-bubble a[href^="/hotel/"] {
+        display: inline-flex;
+        align-items: center;
+        margin-top: 6px;
+        padding: 8px 11px;
+        border-radius: 8px;
+        background: #edf2ff;
+        color: #1f3f8b;
+        line-height: 1.2;
+    }
+
+    .ai-chat-bubble a[href^="/hotel/"]:hover {
+        background: #dbe6ff;
+        text-decoration: none;
     }
 
     .ai-chat-quick {
@@ -217,7 +259,7 @@
         height: 42px;
         border: 0;
         border-radius: 50%;
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        background: linear-gradient(135deg, #1f3f8b, #3252df);
         color: #fff;
         cursor: pointer;
         display: grid;
@@ -251,19 +293,19 @@
 </style>
 
 <div class="ai-chat-toggle-wrap" id="ai-chat-toggle-wrap">
-    <span class="ai-chat-label">Hỗ trợ AI</span>
-    <button id="ai-chat-toggle" type="button" onclick="toggleAiChat()" title="AI Booking Assistant">
+    <span class="ai-chat-label">Hỗ trợ đặt phòng</span>
+    <button id="ai-chat-toggle" type="button" onclick="toggleAiChat()" title="Trợ lý đặt phòng">
         <i class="fas fa-comments"></i>
         <span class="ai-chat-badge" id="ai-chat-badge">1</span>
     </button>
 </div>
 
-<div id="ai-chat-window" aria-label="AI Booking Assistant">
+<div id="ai-chat-window" aria-label="Trợ lý đặt phòng">
     <div class="ai-chat-head">
         <div class="ai-chat-title">
-            <i class="fas fa-robot"></i>
+            <i class="fas fa-headset"></i>
             <div>
-                <strong>AI Booking Assistant</strong>
+                <strong>Trợ lý đặt phòng</strong>
                 <span>Tư vấn khách sạn, phòng và đặt chỗ</span>
             </div>
         </div>
@@ -323,9 +365,19 @@
         }
 
         function formatBotText(text) {
-            return escapeHtml(text)
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\n/g, '<br>');
+            let html = escapeHtml(text);
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g, function (_, label, url) {
+                const target = url.startsWith('/') ? '_self' : '_blank';
+                return `<a href="${url}" target="${target}" rel="noopener">${label}</a>`;
+            });
+            html = html.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g, function (_, prefix, url) {
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+            });
+            html = html.replace(/(^|[\s>])(\/hotel\/\d+)\b/g, function (_, prefix, url) {
+                return `${prefix}<a href="${url}" target="_self">${url}</a>`;
+            });
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            return html.replace(/\n/g, '<br>');
         }
 
         function addMessage(text, type) {
@@ -362,7 +414,10 @@
         }
 
         function shouldSendLocation(message) {
-            return Boolean(userLat && userLng && /gần|near|quanh|xung quanh|vị trí|gan toi/i.test(message));
+            return Boolean(
+                userLat && userLng
+                && /gần tôi|gan toi|near me|quanh đây|quanh day|xung quanh|vị trí hiện tại|vi tri hien tai/i.test(message)
+            );
         }
 
         async function sendMessage(text, forceNearby) {
@@ -385,8 +440,8 @@
                     body: JSON.stringify({
                         message: message,
                         history: chatHistory,
-                        lat: useLocation ? userLat : null,
-                        lng: useLocation ? userLng : null,
+                        lat: userLat || null,
+                        lng: userLng || null,
                         is_nearby: useLocation
                     })
                 });
@@ -398,7 +453,7 @@
                 remember('bot', reply);
             } catch (error) {
                 if (typing) typing.remove();
-                addMessage('Không kết nối được trợ lý AI. Vui lòng thử lại sau.', 'bot');
+                addMessage('Không kết nối được trợ lý đặt phòng. Vui lòng thử lại sau.', 'bot');
             } finally {
                 setLoading(false);
                 if (input) input.focus();
@@ -436,10 +491,11 @@
                 return;
             }
 
-            addMessage('Tôi đang xin quyền lấy vị trí để tìm khách sạn gần bạn.', 'bot');
+            addMessage('Tôi đang xin quyền lấy vị trí để ưu tiên gợi ý khách sạn và phòng gần bạn nhất.', 'bot');
             navigator.geolocation.getCurrentPosition(function (position) {
                 userLat = position.coords.latitude;
                 userLng = position.coords.longitude;
+                addMessage('Đã nhận vị trí của bạn. Các gợi ý tiếp theo sẽ ưu tiên từ gần đến xa.', 'bot');
                 sendMessage('Tìm khách sạn gần vị trí hiện tại của tôi', true);
             }, function () {
                 addMessage('Không lấy được vị trí. Bạn có thể nhập khu vực muốn tìm khách sạn.', 'bot');
