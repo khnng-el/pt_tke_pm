@@ -2,6 +2,62 @@
 
 Một ứng dụng web hiện đại và thân thiện với người dùng để quản lý đặt phòng khách sạn, giao dịch và tài khoản người dùng.
 
+## Chạy Với MySQL
+
+Project hiện được cấu hình ưu tiên MySQL mặc định.
+
+### 1. Tạo file cấu hình môi trường
+
+Tạo file `.env` từ mẫu:
+
+```bash
+cp .env.example .env
+```
+
+Sau đó sửa các biến MySQL trong `.env`:
+
+```env
+DB_BACKEND=mysql
+MYSQL_USER=root
+MYSQL_PASSWORD=mat_khau_mysql_cua_ban
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DB=hotel_management
+```
+
+### 2. Tạo database và import schema
+
+```bash
+mysql -u root -p < setup_database.sql
+```
+
+Nếu bạn không dùng user `root`, thay lại cho phù hợp:
+
+```bash
+mysql -u YOUR_USER -p < setup_database.sql
+```
+
+### 3. Cài dependency
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 4. Chạy ứng dụng
+
+```bash
+source .venv/bin/activate
+python app.py
+```
+
+Tài khoản mẫu sau khi import `setup_database.sql`:
+
+- `admin / admin123`
+- `owner1 / owner123`
+- `customer1 / customer123`
+
 ## Tính Năng
 
 ### Bảng Điều Khiển Người Dùng
@@ -117,4 +173,4 @@ Dự án này được cấp phép theo Giấy phép MIT - xem tệp LICENSE đ�
 
 Tên của bạn - email@example.com
 
-Liên kết dự án: [https://github.com/yourusername/hotelsmanagementweb](https://github.com/yourusername/hotelsmanagementweb) 
+Liên kết dự án: [https://github.com/yourusername/hotelsmanagementweb](https://github.com/yourusername/hotelsmanagementweb)

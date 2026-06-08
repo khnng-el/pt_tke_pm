@@ -16,7 +16,6 @@ function loadHotelDashboard(hotelId, hotelName) {
     fetch(`/api/hotel/${hotelId}/dashboard`)
         .then(res => res.json())
         .then(data => {
-            document.getElementById('totalHotels').textContent = hotelName || '1';
             document.getElementById('totalRooms').textContent = data.total_rooms || 0;
             document.getElementById('todayBookings').textContent = data.today_bookings || 0;
             document.getElementById('totalBookings').textContent = data.total_bookings || 0;
@@ -215,4 +214,4 @@ document.addEventListener('DOMContentLoaded', function () {
     if (hotelBtns.length > 0) {
         hotelBtns[0].click();
     }
-}); 
+});

@@ -1,7 +1,10 @@
 langchain
+langchain-core
+langgraph
 langchain-community
 langchain-google-genai
 langchain-chroma
 chromadb
 tiktoken
 python-dotenv
+google-genai

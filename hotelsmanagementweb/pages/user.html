@@ -604,7 +604,7 @@
                                     {{ booking.status|capitalize }}
                                     {% endif %}
                                 </div>
-                                <img src="{{ booking.image_url or '/assets/image/default-room.webp' }}"
+                                <img src="{{ booking.image_url or '/assets/image/default-hotel.webp' }}"
                                     alt="Room Image">
                             </div>
                             <div class="card__info">
@@ -741,7 +741,7 @@
                         <div class="stat-card">
                             <i class="fa-solid fa-bed"></i>
                             <div class="stat-info">
-                                <h3>Total Rooms</h3>
+                                <h3>Available Rooms</h3>
                                 <p id="totalRooms">0</p>
                             </div>
                         </div>
@@ -812,7 +812,8 @@
                     Now".</li>
                 <li><b>How to view my bookings?</b><br>Click on the "Bookings" menu to see your booking history.</li>
                 <li><b>How to contact support?</b><br>Email: <a
-                        href="mailto:support@hanoibooking.com">support@hanoibooking.com</a> or call: 0123-456-789.</li>
+                        href="mailto:hanoibooking@hotelsmanagement.com">hanoibooking@hotelsmanagement.com</a> or call:
+                    0365651105.</li>
                 <li><b>How to change my password?</b><br>Go to "Account" &rarr; "Change Password".</li>
             </ul>
             <p style="margin-top:16px;">If you need further assistance, please contact our support team.</p>
@@ -1107,7 +1108,7 @@
                 <div class="card__img">
                     <div class="payment-status ${paymentStatusClass}">Payment: ${paymentStatusText}</div>
                     ${actionBtns}
-                    <img src="${booking.image_url || '/assets/image/default-room.webp'}" alt="Room Image">
+                    <img src="${booking.image_url || '/assets/image/default-hotel.webp'}" alt="Room Image">
                 </div>
                 <div class="card__info">
                     <div class="date"><b>${booking.check_in} - ${booking.check_out}</b></div>
@@ -1368,88 +1369,6 @@
             });
         }
 
-        // Hàm load thông tin khách sạn
-        function loadHotelInfo() {
-            fetch('/api/hotel/info')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('hotelName').value = data.name || '';
-                    document.getElementById('hotelAddress').value = data.address || '';
-                    document.getElementById('hotelDescription').value = data.description || '';
-                })
-                .catch(error => console.error('Error loading hotel info:', error));
-        }
-
-        // Hàm cập nhật thông tin khách sạn
-        function updateHotelInfo() {
-            const formData = {
-                name: document.getElementById('hotelName').value,
-                address: document.getElementById('hotelAddress').value,
-                description: document.getElementById('hotelDescription').value
-            };
-
-            fetch('/api/hotel/update', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification('Cập nhật thông tin khách sạn thành công!', 'success');
-                    } else {
-                        showNotification('Có lỗi xảy ra khi cập nhật thông tin!', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showNotification('Có lỗi xảy ra khi cập nhật thông tin!', 'error');
-                });
-        }
-
-        // Hàm load thống kê
-        function loadDashboardStats() {
-            fetch('/api/hotel/dashboard')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('totalRooms').textContent = data.totalRooms || 0;
-                    document.getElementById('todayBookings').textContent = data.todayBookings || 0;
-                    document.getElementById('monthlyRevenue').textContent = formatPrice(data.monthlyRevenue || 0);
-                    document.getElementById('averageRating').textContent = (data.averageRating || 0).toFixed(1);
-
-                    // Vẽ biểu đồ doanh thu
-                    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-                    new Chart(revenueCtx, {
-                        type: 'line',
-                        data: {
-                            labels: data.revenueChart.labels,
-                            datasets: [{
-                                label: 'Doanh thu',
-                                data: data.revenueChart.data,
-                                borderColor: '#1976d2',
-                                tension: 0.1
-                            }]
-                        }
-                    });
-
-                    // Vẽ biểu đồ tỷ lệ đặt phòng
-                    const bookingCtx = document.getElementById('bookingRateChart').getContext('2d');
-                    new Chart(bookingCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Đã đặt', 'Còn trống'],
-                            datasets: [{
-                                data: [data.bookingRate.occupied, data.bookingRate.available],
-                                backgroundColor: ['#43a047', '#e0e0e0']
-                            }]
-                        }
-                    });
-                })
-                .catch(error => console.error('Error loading dashboard stats:', error));
-        }
-
         // Hàm load booking history cho owner
         function loadOwnerBookingHistory() {
             fetch('/api/owner/booking-history')
@@ -1460,15 +1379,21 @@
                     if (data.bookings && data.bookings.length > 0) {
                         historyList.innerHTML = data.bookings.map(b => {
                             const nights = b.nights || (b.check_in && b.check_out ? calculateDays(b.check_in, b.check_out) : 1);
+                            const bookingStatus = b.booking_status || b.status || 'pending';
+                            const paymentStatus = b.payment_status || 'pending';
                             return `
                                 <div class="card">
                                     <div class="card__img">
-                                        <div class="payment-status ${b.payment_status ? 'status-' + b.payment_status.toLowerCase() : ''}">
-                                            Payment: ${b.payment_status ? b.payment_status.charAt(0).toUpperCase() + b.payment_status.slice(1) : 'N/A'}
+                                        <div class="status-badge status-${bookingStatus.toLowerCase()}">
+                                            Booking: ${bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1)}
                                         </div>
-                                        <img src="${b.image_url || '/assets/image/default-room.webp'}" alt="Room Image">
+                                        <div class="payment-status status-${paymentStatus.toLowerCase()}">
+                                            Payment: ${paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1)}
+                                        </div>
+                                        <img src="${b.image_url || '/assets/image/default-hotel.webp'}" alt="Room Image">
                                     </div>
                                     <div class="card__info">
+                                        <div class="address">Booking ID: #${b.booking_id || ''}</div>
                                         <div class="date"><b>${b.check_in} - ${b.check_out}</b></div>
                                         <div class="day">${nights} Night(s)</div>
                                         <div class="location">${b.hotel_name || ''}</div>
@@ -1504,15 +1429,17 @@
                         roomList.innerHTML = data.rooms.map(r => `
                             <div class="card">
                                 <div class="card__img">
-                                    <img src="${r.image_url || '/assets/image/default-room.webp'}" alt="Room Image">
+                                    <img src="${r.image_url || '/assets/image/default-hotel.webp'}" alt="Room Image">
                                 </div>
-                                <div class="card__info">
-                                    <div class="room-type"><b>${r.room_type}</b></div>
-                                    <div class="location">Hotel: ${r.hotel_name}</div>
-                                    <div class="address">Available: ${r.availableRooms}</div>
-                                </div>
-                            </div>
-                        `).join('');
+                    <div class="card__info">
+                        <div class="room-type"><b>${r.room_type}</b></div>
+                        <div class="location">Hotel: ${r.hotel_name}</div>
+                        <div class="address">Available rooms: ${r.availableRooms}</div>
+                        <div class="address">Price: ${formatPrice(r.price || 0)}</div>
+                        <div class="address">Bookings: ${r.success_bookings || 0} success / ${r.pending_bookings || 0} pending / ${r.failed_bookings || 0} failed</div>
+                    </div>
+                </div>
+            `).join('');
                     } else {
                         roomList.innerHTML = '<div class="no-bookings">No room types found.</div>';
                     }
@@ -1526,27 +1453,41 @@
         // Hàm load thống kê dashboard cho owner
         function loadOwnerDashboardStats() {
             fetch('/api/owner/dashboard')
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('Failed to load owner dashboard');
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     document.getElementById('totalHotels').textContent = data.total_hotels || 0;
                     document.getElementById('totalRooms').textContent = data.total_rooms || 0;
+                    document.getElementById('todayBookings').textContent = data.today_bookings || 0;
                     document.getElementById('totalBookings').textContent = data.total_bookings || 0;
                     document.getElementById('totalRevenue').textContent = formatPrice(data.total_revenue || 0);
+                    document.getElementById('monthlyRevenue').textContent = formatPrice(data.monthly_revenue || 0);
+
                     // Hiển thị danh sách khách sạn
                     const hotelList = document.getElementById('ownerHotelList');
-                    if (hotelList && data.hotels) {
+                    if (hotelList && data.hotels && data.hotels.length > 0) {
                         hotelList.innerHTML = data.hotels.map(h => `
                             <button class="hotel-btn" onclick="loadHotelDashboard(${h.hotel_id}, '${h.hotel_name.replace(/'/g, "\\'")}')">${h.hotel_name}</button>
                         `).join('');
+                        loadHotelDashboard(data.hotels[0].hotel_id, data.hotels[0].hotel_name);
+                    } else if (hotelList) {
+                        hotelList.innerHTML = '<div class="no-bookings">No hotels found for this owner.</div>';
                     }
                 })
-                .catch(err => console.error('Error loading dashboard:', err));
+                .catch(err => {
+                    console.error('Error loading dashboard:', err);
+                    const hotelList = document.getElementById('ownerHotelList');
+                    if (hotelList) hotelList.innerHTML = '<div class="no-bookings">Error loading dashboard.</div>';
+                });
         }
         function loadHotelDashboard(hotelId, hotelName) {
             fetch(`/api/hotel/${hotelId}/dashboard`)
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('totalHotels').textContent = hotelName;
                     document.getElementById('totalRooms').textContent = data.total_rooms || 0;
                     document.getElementById('totalBookings').textContent = data.total_bookings || 0;
                     document.getElementById('totalRevenue').textContent = formatPrice(data.total_revenue || 0);
@@ -1565,8 +1506,7 @@
                     const role = (data.role || '').toLowerCase();
                     updateMenuByRole(role === 'owner' ? 'owner' : 'customer');
                     if (role === 'owner') {
-                        loadHotelInfo();
-                        loadDashboardStats();
+                        loadOwnerDashboardStats();
                     } else {
                         loadBookings();
                         loadTransactions();
@@ -1732,19 +1672,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/js/user.js"></script>
-    <!--Start of Tawk.to Script-->
-    <script type="text/javascript">
-        var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
-        (function () {
-            var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
-            s1.async = true;
-            s1.src = 'https://embed.tawk.to/6826bd708ec535190f11a681/1irbl80k7';
-            s1.charset = 'UTF-8';
-            s1.setAttribute('crossorigin', '*');
-            s0.parentNode.insertBefore(s1, s0);
-        })();
-    </script>
-    <!--End of Tawk.to Script-->
+    {% include 'ai_chat_widget.html' %}
 </body>
 
 </html>

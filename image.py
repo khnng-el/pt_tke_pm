@@ -3,10 +3,10 @@ import mysql.connector
 
 # Kết nối database
 conn = mysql.connector.connect(
-    host="127.0.0.1",
-    user="root",
-    password="13112005",
-    database="phantich_tke"
+    host=os.getenv("MYSQL_HOST", "127.0.0.1"),
+    user=os.getenv("MYSQL_USER", "root"),
+    password=os.getenv("MYSQL_PASSWORD", ""),
+    database=os.getenv("MYSQL_DB", "hotel_management")
 )
 cursor = conn.cursor()
 

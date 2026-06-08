@@ -1,17 +1,29 @@
 -- =====================================================
--- Setup script cho database btl_csdl trên macOS
--- Chạy: /usr/local/mysql/bin/mysql -u root -p13112005 < setup_database.sql
+-- Unified setup script for the hotel booking project
+-- Default database name matches config.py: hotel_management
 -- =====================================================
 
-CREATE DATABASE IF NOT EXISTS `btl_csdl` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-USE `btl_csdl`;
+CREATE DATABASE IF NOT EXISTS `hotel_management`
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+USE `hotel_management`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
--- =====================================================
--- Bảng users (schema mới - dùng role thay vì is_admin)
--- =====================================================
+DROP TABLE IF EXISTS `notifications`;
+DROP TABLE IF EXISTS `payment`;
+DROP TABLE IF EXISTS `reviews`;
+DROP TABLE IF EXISTS `room_images`;
+DROP TABLE IF EXISTS `hotel_images`;
+DROP TABLE IF EXISTS `services`;
+DROP TABLE IF EXISTS `bookings`;
+DROP TABLE IF EXISTS `hotel_locations`;
+DROP TABLE IF EXISTS `rooms`;
+DROP TABLE IF EXISTS `hotels`;
+DROP TABLE IF EXISTS `user_security`;
 DROP TABLE IF EXISTS `users`;
+
 CREATE TABLE `users` (
   `user_id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(50) NOT NULL,
@@ -19,166 +31,133 @@ CREATE TABLE `users` (
   `email` varchar(100) NOT NULL,
   `full_name` varchar(100) DEFAULT NULL,
   `phone` varchar(20) DEFAULT NULL,
-  `role` varchar(20) NOT NULL DEFAULT 'CUSTOMER',
-  `is_active` tinyint(1) DEFAULT '1',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `role` ENUM('ADMIN', 'OWNER', 'CUSTOMER') NOT NULL DEFAULT 'CUSTOMER',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
-  UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `email` (`email`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  UNIQUE KEY `uq_users_username` (`username`),
+  UNIQUE KEY `uq_users_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Tạo user owner mặc định (password: 123456 - hashed)
-INSERT INTO `users` (`username`, `password`, `email`, `full_name`, `phone`, `role`) VALUES
-('owner1', 'scrypt:32768:8:1$YK0jZ8qX$b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8', 'owner1@example.com', 'Hotel Owner 1', '0901234567', 'OWNER');
-
--- =====================================================
--- Bảng user_security (THIẾU trong SQL dump, cần cho models.py)
--- =====================================================
-DROP TABLE IF EXISTS `user_security`;
 CREATE TABLE `user_security` (
   `user_id` int NOT NULL,
-  `email_verified` tinyint(1) DEFAULT '0',
+  `email_verified` tinyint(1) NOT NULL DEFAULT 0,
   `email_verification_token` varchar(100) DEFAULT NULL,
   `password_reset_token` varchar(100) DEFAULT NULL,
   `password_reset_expires` datetime DEFAULT NULL,
   `last_login` datetime DEFAULT NULL,
-  `login_attempts` int DEFAULT '0',
+  `login_attempts` int NOT NULL DEFAULT 0,
   `locked_until` datetime DEFAULT NULL,
   PRIMARY KEY (`user_id`),
-  CONSTRAINT `user_security_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CONSTRAINT `fk_user_security_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng hotels
--- =====================================================
-DROP TABLE IF EXISTS `hotels`;
 CREATE TABLE `hotels` (
   `hotel_id` int NOT NULL AUTO_INCREMENT,
-  `hotel_name` varchar(50) DEFAULT NULL,
-  `address_hotel` varchar(150) DEFAULT NULL,
-  `tel` varchar(20) DEFAULT NULL,
+  `hotel_name` varchar(50) NOT NULL,
+  `address_hotel` varchar(150) NOT NULL,
+  `tel` varchar(20) NOT NULL,
   `rating` float DEFAULT NULL,
   `descriptions` varchar(1000) DEFAULT NULL,
   `owner_id` int NOT NULL,
   PRIMARY KEY (`hotel_id`),
-  KEY `owner_id` (`owner_id`),
-  CONSTRAINT `hotels_ibfk_1` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_hotels_owner_id` (`owner_id`),
+  CONSTRAINT `fk_hotels_owner`
+    FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng hotel_locations (THIẾU trong SQL dump, cần cho models.py)
--- =====================================================
-DROP TABLE IF EXISTS `hotel_locations`;
 CREATE TABLE `hotel_locations` (
   `hotel_id` int NOT NULL,
   `latitude` float DEFAULT NULL,
   `longitude` float DEFAULT NULL,
   PRIMARY KEY (`hotel_id`),
-  CONSTRAINT `hotel_locations_ibfk_1` FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CONSTRAINT `fk_hotel_locations_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng hotel_images
--- =====================================================
-DROP TABLE IF EXISTS `hotel_images`;
-CREATE TABLE `hotel_images` (
-  `image_id` int NOT NULL AUTO_INCREMENT,
-  `hotel_id` int DEFAULT NULL,
-  `image_path` varchar(500) DEFAULT NULL,
-  `is_main` tinyint(1) DEFAULT '0',
-  PRIMARY KEY (`image_id`),
-  KEY `hotel_id` (`hotel_id`),
-  CONSTRAINT `hotel_images_ibfk_1` FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =====================================================
--- Bảng rooms
--- =====================================================
-DROP TABLE IF EXISTS `rooms`;
 CREATE TABLE `rooms` (
   `room_id` int NOT NULL AUTO_INCREMENT,
-  `room_type` varchar(35) DEFAULT NULL,
-  `availableRooms` int DEFAULT NULL,
-  `price` bigint DEFAULT NULL,
-  `hotel_id` int DEFAULT NULL,
+  `room_type` varchar(35) NOT NULL,
+  `availableRooms` int DEFAULT 0,
+  `price` bigint NOT NULL,
+  `hotel_id` int NOT NULL,
   PRIMARY KEY (`room_id`),
-  KEY `hotel_id` (`hotel_id`),
-  CONSTRAINT `rooms_ibfk_1` FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_rooms_hotel_id` (`hotel_id`),
+  CONSTRAINT `fk_rooms_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng room_images
--- =====================================================
-DROP TABLE IF EXISTS `room_images`;
-CREATE TABLE `room_images` (
-  `image_id` int NOT NULL AUTO_INCREMENT,
-  `room_id` int DEFAULT NULL,
-  `image_path` varchar(500) DEFAULT NULL,
-  `is_main` tinyint(1) DEFAULT '0',
-  PRIMARY KEY (`image_id`),
-  KEY `room_id` (`room_id`),
-  CONSTRAINT `room_images_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =====================================================
--- Bảng services
--- =====================================================
-DROP TABLE IF EXISTS `services`;
 CREATE TABLE `services` (
   `id_service` int NOT NULL AUTO_INCREMENT,
-  `serviceName` varchar(255) DEFAULT NULL,
-  `room_id` int DEFAULT NULL,
+  `serviceName` varchar(255) NOT NULL,
+  `room_id` int NOT NULL,
   PRIMARY KEY (`id_service`),
-  KEY `room_id` (`room_id`),
-  CONSTRAINT `services_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_services_room_id` (`room_id`),
+  CONSTRAINT `fk_services_room`
+    FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng reviews (thêm created_at cho code)
--- =====================================================
-DROP TABLE IF EXISTS `reviews`;
+CREATE TABLE `hotel_images` (
+  `image_id` int NOT NULL AUTO_INCREMENT,
+  `hotel_id` int NOT NULL,
+  `image_path` varchar(255) NOT NULL,
+  `is_main` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`image_id`),
+  KEY `idx_hotel_images_hotel_id` (`hotel_id`),
+  CONSTRAINT `fk_hotel_images_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `room_images` (
+  `image_id` int NOT NULL AUTO_INCREMENT,
+  `room_id` int NOT NULL,
+  `image_path` varchar(255) NOT NULL,
+  `is_main` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`image_id`),
+  KEY `idx_room_images_room_id` (`room_id`),
+  CONSTRAINT `fk_room_images_room`
+    FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `reviews` (
   `review_id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int DEFAULT NULL,
+  `user_id` int NOT NULL,
   `rating` float DEFAULT NULL,
   `comment` varchar(200) DEFAULT NULL,
-  `hotel_id` int DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `hotel_id` int NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`review_id`),
-  KEY `user_id` (`user_id`),
-  KEY `hotel_id` (`hotel_id`),
-  CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `reviews_ibfk_2` FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_reviews_user_id` (`user_id`),
+  KEY `idx_reviews_hotel_id` (`hotel_id`),
+  CONSTRAINT `fk_reviews_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_reviews_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng bookings (schema mới - có num_rooms)
--- =====================================================
-DROP TABLE IF EXISTS `bookings`;
 CREATE TABLE `bookings` (
   `booking_id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int DEFAULT NULL,
-  `room_id` int DEFAULT NULL,
+  `user_id` int NOT NULL,
+  `room_id` int NOT NULL,
   `check_in` datetime NOT NULL,
   `check_out` datetime NOT NULL,
   `total_price` float NOT NULL,
+  `num_rooms` int NOT NULL DEFAULT 1,
   `status` varchar(20) DEFAULT 'pending',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `num_rooms` int DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`booking_id`),
-  KEY `user_id` (`user_id`),
-  KEY `room_id` (`room_id`),
-  CONSTRAINT `bookings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  CONSTRAINT `bookings_ibfk_2` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_bookings_user_id` (`user_id`),
+  KEY `idx_bookings_room_id` (`room_id`),
+  CONSTRAINT `fk_bookings_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_bookings_room`
+    FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng payment (schema mới - không có user_id, có txn_ref, etc.)
--- =====================================================
-DROP TABLE IF EXISTS `payment`;
 CREATE TABLE `payment` (
   `payment_id` int NOT NULL AUTO_INCREMENT,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `booking_id` int DEFAULT NULL,
   `txn_ref` varchar(100) DEFAULT NULL,
   `amount` bigint DEFAULT NULL,
@@ -189,56 +168,481 @@ CREATE TABLE `payment` (
   `secure_hash` text,
   `payment_method` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`payment_id`),
-  KEY `booking_id` (`booking_id`),
-  CONSTRAINT `payment_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_payment_booking_id` (`booking_id`),
+  CONSTRAINT `fk_payment_booking`
+    FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =====================================================
--- Bảng notifications
--- =====================================================
-DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `type` varchar(50) DEFAULT NULL,
   `message` varchar(255) DEFAULT NULL,
-  `read` tinyint(1) DEFAULT '0',
+  `read` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `user_id` (`user_id`),
-  CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_notifications_user_id` (`user_id`),
+  CONSTRAINT `fk_notifications_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- =====================================================
--- INSERT DATA - Hotels (cần owner_id=1, nên insert owner trước)
--- =====================================================
-INSERT INTO `hotels` VALUES 
-(1,'Swandor Cam Ranh Resort','Km 11 Nguyen Tat Thanh Boulevard, Bai Dai Beach, Cam Lam District, Cam Ranh, Khanh Hoa, Vietnam','+842583988000',8.7,'Swandor Cam Ranh Resort is a five-star beachfront resort located on Bai Dai Beach.',1),
-(2,'Ana Mandara Cam Ranh','Slot D6A - Zone 2, Cam Ranh Peninsula, Cam Lam District, Khanh Hoa, Vietnam','+842583522222',9,'Ana Mandara Cam Ranh is a luxurious 5-star resort nestled along a tranquil private beach.',1),
-(3,'Sheraton Grand Danang Resort','35 Truong Sa Street, Hoa Hai Ward, Ngu Hanh Son District, Da Nang, Vietnam','+842363988999',8.7,'Sheraton Grand Danang Resort is a prestigious five-star hotel situated on Non Nuoc Beach.',1),
-(4,'Imperial Hotel & Spa','44 Hang Hanh Street, Hoan Kiem District, Hanoi, Vietnam','+842439335555',9.1,'Imperial Hotel & Spa is an elegant boutique hotel located in Hanoi Old Quarter.',1),
-(5,'HOTEL de LAGOM','30B-C-D Ly Nam De Street, Cua Dong Ward, Hoan Kiem District, Hanoi, Vietnam','+842433133333',9.4,'HOTEL de LAGOM is a newly opened five-star boutique hotel in Hanoi.',1),
-(6,'DeLaSea Ha Long Hotel','A9, Lot 1, Hung Thang Tourist Area, Ha Long City, Quang Ninh, Vietnam','+842033636999',9,'DeLaSea Ha Long Hotel is a contemporary 5-star hotel in Ha Long City.',1),
-(7,'Legacy Yen Tu - MGallery','Thuong Yen Cong Commune, Uong Bi City, Quang Ninh Province, Vietnam','+842036259888',9,'Legacy Yen Tu - MGallery is a unique luxury resort at the foot of Yen Tu Mountain.',1),
-(8,'Seashells Phu Quoc Hotel & Spa','1 Vo Thi Sau Street, Duong Dong, Phu Quoc, Kien Giang, Vietnam','+842977300999',9,'Seashells Phu Quoc Hotel & Spa is a modern oceanfront hotel on Phu Quoc Island.',1),
-(9,'Sailing Club Signature Resort','Group 6, Duong Bao Hamlet, Duong To, Phu Quoc, Kien Giang, Vietnam','+842973660000',9.4,'Sailing Club Signature Resort Phu Quoc is an exclusive villa resort.',1),
-(10,'Movenpick Resort Cam Ranh','Plot D12, Cam Hai Dong, Cam Lam District, Khanh Hoa 57615, Vietnam','+842583985888',8.7,'Movenpick Resort Cam Ranh is a family-friendly beachfront resort.',1);
+INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`) VALUES
+(1, 'admin', 'scrypt:32768:8:1$VVrYsN93GaFV6DM3$4685080a89dd2f8c3cf6675d31c5308ed316285e6ca30f65a2216e3dcf0f0b21492e610594cb6b80a58d5b990b4c252ffdddb4a9718f4882618ba45bb144d668', 'admin@example.com', 'System Admin', '0900000001', 'ADMIN'),
+(2, 'owner1', 'scrypt:32768:8:1$DHlUK2z0S4N7ysUa$0d10a934690ac3f22737d56e0143a4f8b031bd85fda31f75cfa41d36d03b5e62b4eac1d8e59beae7fad5698f8478906194df22a4bbfd81bbbbddb6daa4054376', 'owner1@example.com', 'Primary Hotel Owner', '0900000002', 'OWNER'),
+(3, 'customer1', 'scrypt:32768:8:1$Q21tLUnhs2QCfE9x$00d17365b2e7220d0c75e1514a69ff540e5e3f009e39a2f7f5166975b01cf2d0f96ac9082932b9095ab52d7a3c120e61787cd3ad243af6c662f9a9368212b0db', 'customer1@example.com', 'Sample Customer', '0900000003', 'CUSTOMER');
 
--- =====================================================
--- INSERT DATA - Rooms
--- =====================================================
-INSERT INTO `rooms` VALUES 
-(1,'Deluxe Sea View Room',8,5000000,1),(2,'Deluxe Front Sea View Room',6,6000000,1),(3,'Deluxe Family Sea View Room',5,8000000,1),
-(4,'Deluxe Ocean View Room',6,5000000,2),(5,'1-Bedroom Beachfront Pool Villa',4,9000000,2),(6,'2-Bedroom Beachfront Pool Villa',3,10000000,2),
-(7,'Deluxe King Room with Balcony',10,4000000,3),(8,'Premier Ocean View Room',8,6000000,3),(9,'Executive Suite',5,8000000,3),
-(10,'Deluxe Room',9,2000000,4),(11,'Executive Room',7,2500000,4),(12,'Imperial Suite',5,4000000,4),
-(13,'Deluxe Window Room',10,3000000,5),(14,'Premium Balcony Room',8,3500000,5),(15,'Lagom Suite',5,5000000,5),
-(16,'Deluxe Twin Room',8,2500000,6),(17,'Executive Ocean View Room',6,3500000,6),(18,'Family Suite Ocean View',4,5000000,6),
-(19,'Superior King Room',10,3000000,7),(20,'Deluxe Twin Room',9,3500000,7),(21,'Executive Suite',5,6000000,7),
-(22,'Deluxe Double Ocean View',10,2500000,8),(23,'Premier Ocean View Room',9,3500000,8),(24,'Family Suite Sea View',6,5000000,8),
-(25,'One-Bedroom Pool Villa',5,6000000,9),(26,'Two-Bedroom Pool Villa',5,8000000,9),(27,'Three-Bedroom Pool Villa',5,10000000,9),
-(28,'Deluxe Sea View Room',10,4500000,10),(29,'Junior Suite Ocean View',8,6000000,10),(30,'Three-Bedroom Pool Villa',4,10000000,10);
+INSERT INTO `user_security` (`user_id`, `email_verified`, `login_attempts`) VALUES
+(1, 1, 0),
+(2, 1, 0),
+(3, 1, 0);
 
-SELECT 'Database btl_csdl created and populated successfully!' AS status;
+INSERT INTO `hotels` (`hotel_id`, `hotel_name`, `address_hotel`, `tel`, `rating`, `descriptions`, `owner_id`) VALUES
+(1, 'Swandor Cam Ranh Resort – Ultra All Inclusive', 'Km 11 Nguyen Tat Thanh Boulevard, Bai Dai Beach, Cam Lam District, Cam Ranh, Khanh Hoa, Vietnam', '+842583988000', 8.7, 'A beachfront all-inclusive resort on Bai Dai Beach, designed for relaxed family holidays and easy seaside escapes. Guests have direct beach access, bright rooms, ocean-facing views, pools, dining, kids activities and daily services included, making the stay simple from check-in to check-out.', 2),
+(2, 'Ana Mandara Cam Ranh', 'Slot D6A - Zone 2, Cam Ranh Peninsula, Cam Lam District, Khanh Hoa, Vietnam', '+842583522222', 9.0, 'A quiet coastal resort on Cam Ranh Peninsula with low-rise architecture, tropical gardens and direct access to a wide sandy beach. The property focuses on calm, privacy and premium comfort, with ocean-view rooms, spacious villas, breakfast, spa-style relaxation and attentive service for couples or families.', 2),
+(3, 'Sheraton Grand Danang Resort & Convention Center', '35 Truong Sa Street, Hoa Hai Ward, Ngu Hanh Son District, Da Nang, Vietnam', '+842363988999', 8.7, 'A large beachfront resort between Da Nang and Hoi An, suitable for leisure trips, events and family stays. Guests can enjoy spacious rooms, sea views, a signature pool, restaurants, conference facilities, beach access and reliable resort services in a convenient location near Marble Mountains.', 2),
+(4, 'Imperial Hotel & Spa', '44 Hang Hanh Street, Hoan Kiem District, Hanoi, Vietnam', '+842439335555', 9.1, 'A boutique hotel in the heart of Hanoi Old Quarter, close to Hoan Kiem Lake, weekend walking streets, cafes and local restaurants. Rooms are designed for practical city comfort, supported by breakfast, spa services, room service and friendly front-desk assistance for guests exploring central Hanoi.', 2),
+(5, 'HOTEL de LAGOM', '30B-C-D Ly Nam De Street, Cua Dong Ward, Hoan Kiem District, Hanoi, Vietnam', '+842433133333', 9.4, 'A modern boutique hotel in central Hanoi with a clean Scandinavian-inspired style and a calm atmosphere after a busy day in the city. Guests can expect comfortable rooms, smart in-room amenities, breakfast, Wi-Fi and easy access to the Old Quarter, cultural streets, local dining and business areas.', 2),
+(6, 'DeLaSea Ha Long Hotel', 'A9, Lot 1, Hung Thang Tourist Area, Ha Long City, Quang Ninh, Vietnam', '+842033636999', 9.0, 'A contemporary hotel in Ha Long with comfortable rooms, bay-inspired views and convenient access to the city waterfront. The property is well suited for short breaks, family trips and business travel, offering breakfast, room service, modern in-room amenities and access to nearby beaches, restaurants and attractions.', 2),
+(7, 'Legacy Yen Tu - MGallery', 'Thuong Yen Cong Commune, Uong Bi City, Quang Ninh Province, Vietnam', '+842036259888', 9.0, 'A cultural mountain retreat near Yen Tu, created for guests who want quiet scenery, heritage-inspired design and a slower pace. Rooms and suites feel peaceful and atmospheric, with mountain views, spa-style relaxation, breakfast, room service and easy access to spiritual sites, walking paths and nature.', 2),
+(8, 'Seashells Phu Quoc Hotel & Spa', '1 Vo Thi Sau Street, Duong Dong, Phu Quoc, Kien Giang, Vietnam', '+842977300999', 9.0, 'An oceanfront hotel in central Duong Dong, close to the beach, night market, local seafood restaurants and island attractions. Guests can enjoy sea-view rooms, breakfast, pool access, spa-style services, Wi-Fi and a practical location for both relaxing by the water and exploring Phu Quoc.', 2),
+(9, 'Sailing Club Signature Resort Phu Quoc', 'Group 6, Duong Bao Hamlet, Duong To, Phu Quoc, Kien Giang, Vietnam', '+842973660000', 9.4, 'A private villa resort near Long Beach, designed for families, groups and longer island stays. Villas offer generous living space, private-pool options, kitchen-style comfort, beach access and resort services, giving guests a relaxed base for swimming, dining, celebrations and quiet time in Phu Quoc.', 2),
+(10, 'Movenpick Resort Cam Ranh', 'Plot D12, Cam Hai Dong, Cam Lam District, Khanh Hoa 57615, Vietnam', '+842583985888', 8.7, 'A family-friendly beachfront resort in Cam Ranh with pools, water activities, spacious rooms and relaxed resort facilities. The property works well for couples, families and group holidays, offering breakfast, beach access, dining, kids-friendly spaces and comfortable rooms close to Cam Ranh International Airport.', 2);
+
+INSERT INTO `hotel_locations` (`hotel_id`, `latitude`, `longitude`) VALUES
+(1, 11.9908, 109.2197),
+(2, 11.9985, 109.2190),
+(3, 16.0042, 108.2675),
+(4, 21.0289, 105.8522),
+(5, 21.0366, 105.8412),
+(6, 20.9565, 107.0177),
+(7, 21.1479, 106.7240),
+(8, 10.2198, 103.9654),
+(9, 10.1412, 103.9951),
+(10, 12.0247, 109.2167);
+
+INSERT INTO `rooms` (`room_id`, `room_type`, `availableRooms`, `price`, `hotel_id`) VALUES
+(1, 'Deluxe Sea View Room', 8, 5000000, 1),
+(2, 'Deluxe Front Sea View Room', 6, 6000000, 1),
+(3, 'Deluxe Family Sea View Room', 5, 8000000, 1),
+(4, 'Deluxe Ocean View Room', 6, 5000000, 2),
+(5, '1-Bedroom Beachfront Pool Villa', 4, 9000000, 2),
+(6, '2-Bedroom Beachfront Pool Villa', 3, 10000000, 2),
+(7, 'Deluxe King Room with Balcony', 10, 4000000, 3),
+(8, 'Premier Ocean View Room', 8, 6000000, 3),
+(9, 'Executive Suite', 5, 8000000, 3),
+(10, 'Deluxe Room', 9, 2000000, 4),
+(11, 'Executive Room', 7, 2500000, 4),
+(12, 'Imperial Suite', 5, 4000000, 4),
+(13, 'Deluxe Window Room', 10, 3000000, 5),
+(14, 'Premium Balcony Room', 8, 3500000, 5),
+(15, 'Lagom Suite', 5, 5000000, 5),
+(16, 'Deluxe Twin Room', 8, 2500000, 6),
+(17, 'Executive Ocean View Room', 6, 3500000, 6),
+(18, 'Family Suite Ocean View', 4, 5000000, 6),
+(19, 'Superior King Room', 10, 3000000, 7),
+(20, 'Deluxe Twin Room', 9, 3500000, 7),
+(21, 'Executive Suite', 5, 6000000, 7),
+(22, 'Deluxe Double Ocean View', 10, 2500000, 8),
+(23, 'Premier Ocean View Room', 9, 3500000, 8),
+(24, 'Family Suite Sea View', 6, 5000000, 8),
+(25, 'One-Bedroom Pool Villa', 5, 6000000, 9),
+(26, 'Two-Bedroom Pool Villa', 5, 8000000, 9),
+(27, 'Three-Bedroom Pool Villa', 5, 10000000, 9),
+(28, 'Deluxe Sea View Room', 10, 4500000, 10),
+(29, 'Junior Suite Ocean View', 8, 6000000, 10),
+(30, 'Three-Bedroom Pool Villa', 4, 10000000, 10);
+
+INSERT INTO `services` (`serviceName`, `room_id`) VALUES
+('Free Wi-Fi', 1),
+('Breakfast Included', 1),
+('Ocean View', 1),
+('Air conditioning', 1),
+('Smart TV', 1),
+('Minibar', 1),
+('Free Wi-Fi', 2),
+('Breakfast Included', 2),
+('Ocean View', 2),
+('Balcony', 2),
+('Room Service', 2),
+('Coffee/Tea Maker', 2),
+('Free Wi-Fi', 3),
+('Breakfast Included', 3),
+('Ocean View', 3),
+('Family Friendly', 3),
+('Room Service', 3),
+('Smart TV', 3),
+('Free Wi-Fi', 4),
+('Airport Transfer', 4),
+('Spa Access', 4),
+('Ocean View', 4),
+('Breakfast Included', 4),
+('Minibar', 4),
+('Free Wi-Fi', 5),
+('Private Pool', 5),
+('Beach Access', 5),
+('Breakfast Included', 5),
+('Spa Access', 5),
+('Room Service', 5),
+('Free Wi-Fi', 6),
+('Private Pool', 6),
+('Beach Access', 6),
+('Family Friendly', 6),
+('Dinner Included', 6),
+('Airport Transfer', 6),
+('Free Wi-Fi', 7),
+('Pool Access', 7),
+('Room Service', 7),
+('Balcony', 7),
+('Breakfast Included', 7),
+('Smart TV', 7),
+('Free Wi-Fi', 8),
+('Ocean View', 8),
+('Pool Access', 8),
+('Breakfast Included', 8),
+('Spa Access', 8),
+('Coffee/Tea Maker', 8),
+('Free Wi-Fi', 9),
+('Ocean View', 9),
+('Room Service', 9),
+('Spa Access', 9),
+('Dinner Included', 9),
+('Minibar', 9),
+('Free Wi-Fi', 10),
+('City View', 10),
+('Breakfast Included', 10),
+('Air conditioning', 10),
+('Smart TV', 10),
+('Coffee/Tea Maker', 10),
+('Free Wi-Fi', 11),
+('City View', 11),
+('Room Service', 11),
+('Breakfast Included', 11),
+('Minibar', 11),
+('Smart TV', 11),
+('Free Wi-Fi', 12),
+('City View', 12),
+('Spa Access', 12),
+('Room Service', 12),
+('Breakfast Included', 12),
+('Coffee/Tea Maker', 12),
+('Free Wi-Fi', 13),
+('City View', 13),
+('Breakfast Included', 13),
+('Air conditioning', 13),
+('Smart TV', 13),
+('Coffee/Tea Maker', 13),
+('Free Wi-Fi', 14),
+('Balcony', 14),
+('City View', 14),
+('Breakfast Included', 14),
+('Room Service', 14),
+('Minibar', 14),
+('Free Wi-Fi', 15),
+('City View', 15),
+('Room Service', 15),
+('Spa Access', 15),
+('Dinner Included', 15),
+('Coffee/Tea Maker', 15),
+('Free Wi-Fi', 16),
+('Ocean View', 16),
+('Pool Access', 16),
+('Breakfast Included', 16),
+('Smart TV', 16),
+('Minibar', 16),
+('Free Wi-Fi', 17),
+('Ocean View', 17),
+('Room Service', 17),
+('Spa Access', 17),
+('Breakfast Included', 17),
+('Coffee/Tea Maker', 17),
+('Free Wi-Fi', 18),
+('Ocean View', 18),
+('Family Friendly', 18),
+('Room Service', 18),
+('Dinner Included', 18),
+('Pool Access', 18),
+('Free Wi-Fi', 19),
+('Mountain View', 19),
+('Breakfast Included', 19),
+('Spa Access', 19),
+('Coffee/Tea Maker', 19),
+('Smart TV', 19),
+('Free Wi-Fi', 20),
+('Mountain View', 20),
+('Balcony', 20),
+('Breakfast Included', 20),
+('Room Service', 20),
+('Minibar', 20),
+('Free Wi-Fi', 21),
+('Mountain View', 21),
+('Spa Access', 21),
+('Room Service', 21),
+('Dinner Included', 21),
+('Coffee/Tea Maker', 21),
+('Free Wi-Fi', 22),
+('Beach Access', 22),
+('Dinner Included', 22),
+('Ocean View', 22),
+('Breakfast Included', 22),
+('Smart TV', 22),
+('Free Wi-Fi', 23),
+('Ocean View', 23),
+('Beach Access', 23),
+('Breakfast Included', 23),
+('Spa Access', 23),
+('Minibar', 23),
+('Free Wi-Fi', 24),
+('Ocean View', 24),
+('Family Friendly', 24),
+('Beach Access', 24),
+('Room Service', 24),
+('Dinner Included', 24),
+('Free Wi-Fi', 25),
+('Private Pool', 25),
+('Beach Access', 25),
+('Breakfast Included', 25),
+('Room Service', 25),
+('Coffee/Tea Maker', 25),
+('Free Wi-Fi', 26),
+('Private Pool', 26),
+('Beach Access', 26),
+('Family Friendly', 26),
+('Dinner Included', 26),
+('Smart TV', 26),
+('Free Wi-Fi', 27),
+('Private Pool', 27),
+('Beach Access', 27),
+('Family Friendly', 27),
+('Room Service', 27),
+('Dinner Included', 27),
+('Free Wi-Fi', 28),
+('Pool Access', 28),
+('Family Friendly', 28),
+('Ocean View', 28),
+('Breakfast Included', 28),
+('Smart TV', 28),
+('Free Wi-Fi', 29),
+('Ocean View', 29),
+('Pool Access', 29),
+('Room Service', 29),
+('Spa Access', 29),
+('Minibar', 29),
+('Free Wi-Fi', 30),
+('Private Pool', 30),
+('Family Friendly', 30),
+('Dinner Included', 30),
+('Beach Access', 30),
+('Room Service', 30);
+
+-- Hotel images seeded from hotelsmanagementweb/assets/<hotel_id>
+INSERT INTO `hotel_images` (`hotel_id`, `image_path`, `is_main`) VALUES
+(1, '/assets/1/106d9741dc8d0ef1ed312c495a0e94a1.webp', 1),
+(1, '/assets/1/113264353.jpg', 0),
+(1, '/assets/1/122348096.jpg', 0),
+(1, '/assets/1/13fb9a679b5e3b74e0dddc0fb538ea2f.webp', 0),
+(1, '/assets/1/2014d5bafbd01e7d0f9a410468ee245b.webp', 0),
+(2, '/assets/2/16128874773e43b95f3cee34a9b6cfe1.webp', 1),
+(2, '/assets/2/501994242.jpg', 0),
+(2, '/assets/2/501995507.jpg', 0),
+(2, '/assets/2/501995524.jpg', 0),
+(2, '/assets/2/501998188.jpg', 0),
+(3, '/assets/3/04f7f1d6cc5a6717342a10463fc3926f.webp', 1),
+(3, '/assets/3/0a9b73b194a4e5e90fb717f151983f54.webp', 0),
+(3, '/assets/3/0ee2c3364f4b4962be799bddb2017b40.webp', 0),
+(3, '/assets/3/10674e29adb6abf1c024e1a81efaba6b.webp', 0),
+(3, '/assets/3/1ea7b1279539bb9e49a383fffd068259.webp', 0),
+(4, '/assets/4/0476d3cb4a43893ed8a99f081ddbdd47.webp', 1),
+(4, '/assets/4/10718b5b7ba420b0a8e6ea406208fb97.webp', 0),
+(4, '/assets/4/1dd7e61690ead3f6f3a7faab0cdbbfef.webp', 0),
+(4, '/assets/4/223854750.jpg', 0),
+(4, '/assets/4/223871248.jpg', 0),
+(5, '/assets/5/04e4b16af90c9b885245422d1b3cdbbd.webp', 1),
+(5, '/assets/5/0b9b2b2a8069eb2d687102f57bf25e49.webp', 0),
+(5, '/assets/5/17213d7f79172193193df10b677c933a.webp', 0),
+(5, '/assets/5/2d04db28af6bfc253bd7fc6c19680abb.webp', 0),
+(5, '/assets/5/363c89702f8092d0e604d0b2aa540e1d.webp', 0),
+(6, '/assets/6/08d1b94245351bffafbb5ee7af1bada6.webp', 1),
+(6, '/assets/6/2241836e776db7426fcc93935bfcd1af.webp', 0),
+(6, '/assets/6/262578137.jpg', 0),
+(6, '/assets/6/292bc818c7170ca178f0bcae97647d5f.webp', 0),
+(6, '/assets/6/3106f0dfc529b8c5dbe8ae51b9b4bfbb.webp', 0),
+(7, '/assets/7/0de43583bf502fb93433ad25d1bbf034.webp', 1),
+(7, '/assets/7/176474914.jpg', 0),
+(7, '/assets/7/457874504.jpg', 0),
+(7, '/assets/7/457874506.jpg', 0),
+(7, '/assets/7/457884076.jpg', 0),
+(8, '/assets/8/248c2dcf86dd9a7789b9a663cf13ccce.webp', 1),
+(8, '/assets/8/2fb3d626fdc2965911cd1ce9c6d7cfd0.webp', 0),
+(8, '/assets/8/3374915996514367ff03645ae4a57e7e.webp', 0),
+(8, '/assets/8/43d426cc151661a5ec7504d736f8e0ab.webp', 0),
+(8, '/assets/8/46109ab1a859f1d83fe29e25940db925.webp', 0),
+(9, '/assets/9/0ea195faa0051493f1e6ac280cbb7db0.webp', 1),
+(9, '/assets/9/1c3aeb4ed1f551cadf8fb40b9db2c7c9.webp', 0),
+(9, '/assets/9/471324205.jpg', 0),
+(9, '/assets/9/471324209.jpg', 0),
+(9, '/assets/9/471324216.jpg', 0),
+(10, '/assets/10/076edfcf52630ae5a74dd28123132e62.webp', 1),
+(10, '/assets/10/17cf22b07b377fae2fa9e9a2b4cff599.webp', 0),
+(10, '/assets/10/218776560.jpg', 0),
+(10, '/assets/10/223748753.jpg', 0),
+(10, '/assets/10/235334176.jpg', 0);
+
+-- Room images seeded from hotelsmanagementweb/assets/<hotel_id>/<room_id>
+INSERT INTO `room_images` (`room_id`, `image_path`, `is_main`) VALUES
+(1, '/assets/1/1/0a9fde2f95a21feca9db4f25ba89e874.webp', 1),
+(1, '/assets/1/1/177f6625fa1aabd2849f1609cefa9772.webp', 0),
+(1, '/assets/1/1/469256416.jpg', 0),
+(1, '/assets/1/1/469256434.jpg', 0),
+(1, '/assets/1/1/4fc248eb1f3d5ccd00f3697e3e4bb221.webp', 0),
+(2, '/assets/1/2/068c6fba159520700488726864ffdd47.webp', 1),
+(2, '/assets/1/2/204118492.jpg', 0),
+(2, '/assets/1/2/211b79b2cadafe08c1b96a0429b1169e.webp', 0),
+(2, '/assets/1/2/2334084_19060811140075632811.webp', 0),
+(2, '/assets/1/2/588cf87d88bdea810ea984d947c43d57.webp', 0),
+(3, '/assets/1/3/45009d75a838e8eeef3bb421ed499415.webp', 1),
+(3, '/assets/1/3/469256579.jpg', 0),
+(3, '/assets/1/3/614f85a2df9ec5d6876444e278961618.webp', 0),
+(3, '/assets/1/3/8154956816ed599476d79577e666fe39.webp', 0),
+(3, '/assets/1/3/a3e0bae8d91653b64976654f99e29704.webp', 0),
+(4, '/assets/2/4/0b72e1f83c69fbcd9e6abb903c7b4413.webp', 1),
+(4, '/assets/2/4/1e12960c6141f8159c57438725e439ae.webp', 0),
+(4, '/assets/2/4/462706375.jpg', 0),
+(4, '/assets/2/4/462706379.jpg', 0),
+(4, '/assets/2/4/462706380.jpg', 0),
+(5, '/assets/2/5/00368cfc9023c12b6ee3ec9faad8e3f8.webp', 1),
+(5, '/assets/2/5/367916813.jpg', 0),
+(5, '/assets/2/5/3b9f9aba407a853ffa46714eaa35e80c.webp', 0),
+(5, '/assets/2/5/405073235.jpg', 0),
+(5, '/assets/2/5/501996580.jpg', 0),
+(6, '/assets/2/6/0c01e5244a3bcf7518f2badefb1e8223.webp', 1),
+(6, '/assets/2/6/2484a6e507bc93f221fcdfaf32daa0e5.webp', 0),
+(6, '/assets/2/6/368501678.jpg', 0),
+(6, '/assets/2/6/501995495.jpg', 0),
+(6, '/assets/2/6/501995497.jpg', 0),
+(7, '/assets/3/7/76d8b3ef70462d6341a85d25e80820a9.webp', 1),
+(7, '/assets/3/7/786c27b92f9ad587f7180baa3cd9b97f.webp', 0),
+(7, '/assets/3/7/8bc373e9b347d88bb18ac16914e5f044.webp', 0),
+(7, '/assets/3/7/9841ab997d7ae53ce7ea0f42806ae349.webp', 0),
+(7, '/assets/3/7/c02f2a19dc61a4fe7f940af5dafd05c4.webp', 0),
+(8, '/assets/3/8/12c57070e579f1dcf0c4e695585a0917.webp', 1),
+(8, '/assets/3/8/2577ade97da3ce4da9e38deb47d03eda.webp', 0),
+(8, '/assets/3/8/616801829.jpg', 0),
+(8, '/assets/3/8/834b2aa8428fad0cc4b760cd63c07d11.webp', 0),
+(8, '/assets/3/8/8bc373e9b347d88bb18ac16914e5f044.webp', 0),
+(9, '/assets/3/9/2647933add64e64fb67475e4f426b70e.webp', 1),
+(9, '/assets/3/9/267a5d7a82a9bdd759492ab3f7998960.webp', 0),
+(9, '/assets/3/9/35b1ca5afc57a009cf3518fe93b16a59.webp', 0),
+(9, '/assets/3/9/4b1030aa1eae54ce9386e0ceabdabad4.webp', 0),
+(9, '/assets/3/9/616801939.jpg', 0),
+(10, '/assets/4/10/165aa378b0aaa15c30bc4fda0ffb50ff.webp', 1),
+(10, '/assets/4/10/220320515.jpg', 0),
+(10, '/assets/4/10/220320524.jpg', 0),
+(10, '/assets/4/10/223854751.jpg', 0),
+(10, '/assets/4/10/223854753.jpg', 0),
+(11, '/assets/4/11/02904cf3bb13d5ee538db815cb91fa76.jpeg', 1),
+(11, '/assets/4/11/11d7b773f8e60c43cf7fda2255e0f1be.jpeg', 0),
+(11, '/assets/4/11/14a8e03c3d5e938ecf64fe381d077fac.webp', 0),
+(11, '/assets/4/11/1c7c6fcace72b7afc6af4c690250f841.jpeg', 0),
+(11, '/assets/4/11/40f64b8a0483788babcf83cf8be126f7.webp', 0),
+(12, '/assets/4/12/032ea526bef2e93ad00d90039ff416bc.jpeg', 1),
+(12, '/assets/4/12/0ea89d42b67b76bf6bc2e800c6cf8ea4.jpeg', 0),
+(12, '/assets/4/12/0ff7300f09174205cc733f53773bdd6f.jpeg', 0),
+(12, '/assets/4/12/2058c1f59955cce5a6adbe6a5f7a197c.jpeg', 0),
+(12, '/assets/4/12/223851845.jpg', 0),
+(13, '/assets/5/13/1.jpg', 1),
+(13, '/assets/5/13/10.jpg', 0),
+(13, '/assets/5/13/2 (1).jpg', 0),
+(13, '/assets/5/13/2.jpg', 0),
+(13, '/assets/5/13/3.jpg', 0),
+(14, '/assets/5/14/1.jpg', 1),
+(14, '/assets/5/14/10.jpg', 0),
+(14, '/assets/5/14/11.jpg', 0),
+(14, '/assets/5/14/12.jpg', 0),
+(14, '/assets/5/14/16.jpg', 0),
+(15, '/assets/5/15/1.jpg', 1),
+(15, '/assets/5/15/10.jpg', 0),
+(15, '/assets/5/15/111.jpg', 0),
+(15, '/assets/5/15/1111.jpg', 0),
+(15, '/assets/5/15/2.jpg', 0),
+(16, '/assets/6/16/131771ad01924b682217197c1a74c24f.webp', 1),
+(16, '/assets/6/16/15d036b4eaf47fb2d46d4c49521edc53.webp', 0),
+(16, '/assets/6/16/1c68a55d714c91ebc9968d36978c5777.webp', 0),
+(16, '/assets/6/16/3043ad29af1c2fbea77abb3e4006fc37.webp', 0),
+(16, '/assets/6/16/612117441.jpg', 0),
+(17, '/assets/6/17/4cfc9ff48c41608f66a10cd0db6c09c5.webp', 1),
+(17, '/assets/6/17/611716454.jpg', 0),
+(17, '/assets/6/17/611716477.jpg', 0),
+(17, '/assets/6/17/611716479.jpg', 0),
+(17, '/assets/6/17/611716480.jpg', 0),
+(18, '/assets/6/18/131771ad01924b682217197c1a74c24f.webp', 1),
+(18, '/assets/6/18/147803330d95812b0b114705835b277c.webp', 0),
+(18, '/assets/6/18/4a8561bda4be989b5e93c8c86db03365.webp', 0),
+(18, '/assets/6/18/56b05f89e14b69ffca84a5530f2a9625.webp', 0),
+(18, '/assets/6/18/611719749.jpg', 0),
+(19, '/assets/7/19/0e3d691d26fc04c0e3d2ce075242f1ec.webp', 1),
+(19, '/assets/7/19/176497340.jpg', 0),
+(19, '/assets/7/19/25435f31f6e7f96aed2e41ed9870f434.webp', 0),
+(19, '/assets/7/19/33e38ec0b40068cc5c25250b30a0143a.webp', 0),
+(19, '/assets/7/19/5452be23f476905a38622aa1f78a392c.webp', 0),
+(20, '/assets/7/20/0e3d691d26fc04c0e3d2ce075242f1ec (1).webp', 1),
+(20, '/assets/7/20/176497340.jpg', 0),
+(20, '/assets/7/20/227191019.jpg', 0),
+(20, '/assets/7/20/304904942.jpg', 0),
+(20, '/assets/7/20/466871541.jpg', 0),
+(21, '/assets/7/21/227191037.jpg', 1),
+(21, '/assets/7/21/287aee6d548aa529f9bc808d324fd72a.webp', 0),
+(21, '/assets/7/21/3a182fe5ebb6f78bdcce7ab86ec8fafa.webp', 0),
+(21, '/assets/7/21/457874509.jpg', 0),
+(21, '/assets/7/21/457874839.jpg', 0),
+(22, '/assets/8/22/373ecea306085dee272f0fcc6f4dcb24.webp', 1),
+(22, '/assets/8/22/5a325a7b91cd57f5aef644d1b941d598.webp', 0),
+(22, '/assets/8/22/6f538c3825d12404b4ef6a47cdc3d5ff.webp', 0),
+(22, '/assets/8/22/73a5fff1d54391a600878db6ec3bb1b8.webp', 0),
+(22, '/assets/8/22/7532fb09313e35e6902c9c9b01c9ad63.webp', 0),
+(23, '/assets/8/23/0e109114cd8684ac90de646bb60b752f.webp', 1),
+(23, '/assets/8/23/15dc94d918df54bcf0f45d3bd8047664.webp', 0),
+(23, '/assets/8/23/3391135f5b5bcd481d5fe345207905f1.webp', 0),
+(23, '/assets/8/23/589184168.jpg', 0),
+(23, '/assets/8/23/589184313.jpg', 0),
+(24, '/assets/8/24/02cd9ef7093676b57eaf7e439c661be2.webp', 1),
+(24, '/assets/8/24/0f2732af7cc0d506ab58e3488313dc6d.webp', 0),
+(24, '/assets/8/24/131ee6ed4e58990e368e029c6e05d556.webp', 0),
+(24, '/assets/8/24/2a7f5bf799745741ef0dfac110058b28.webp', 0),
+(24, '/assets/8/24/32149eea75bd7296dd6a43334432837b.webp', 0),
+(25, '/assets/9/25/2554ad0c7d605521d1f4ed5c4fad7acc.webp', 1),
+(25, '/assets/9/25/44088375.jpg', 0),
+(25, '/assets/9/25/440883755.jpg', 0),
+(25, '/assets/9/25/440884064.jpg', 0),
+(25, '/assets/9/25/440890964.jpg', 0),
+(26, '/assets/9/26/258d005f767cf228f68b294f8ff7f1f9.webp', 1),
+(26, '/assets/9/26/440883755.jpg', 0),
+(26, '/assets/9/26/440884064.jpg', 0),
+(26, '/assets/9/26/440885140.jpg', 0),
+(26, '/assets/9/26/440885202.jpg', 0),
+(27, '/assets/9/27/440883755.jpg', 1),
+(27, '/assets/9/27/440885140 (1).jpg', 0),
+(27, '/assets/9/27/440885140.jpg', 0),
+(27, '/assets/9/27/440886019.jpg', 0),
+(27, '/assets/9/27/440888096.jpg', 0),
+(28, '/assets/10/28/0b1dc57f913398e79d15df8bd80321a6.webp', 1),
+(28, '/assets/10/28/12068ed923d85128c9abdc831909d0b3.webp', 0),
+(28, '/assets/10/28/17cf22b07b377fae2fa9e9a2b4cff599.webp', 0),
+(28, '/assets/10/28/1a37b39462cf74685487db70e085869a.webp', 0),
+(28, '/assets/10/28/237646216.jpg', 0),
+(29, '/assets/10/29/0a48469d3b0d08c6b6d7760dc2c101fd.webp', 1),
+(29, '/assets/10/29/17cf22b07b377fae2fa9e9a2b4cff599.webp', 0),
+(29, '/assets/10/29/235334176.jpg', 0),
+(29, '/assets/10/29/313740477d3a246dc1eae02a3d638979.webp', 0),
+(29, '/assets/10/29/382816c5b29093976bc9a6f67830379a.webp', 0),
+(30, '/assets/10/30/1a37b39462cf74685487db70e085869a.webp', 1),
+(30, '/assets/10/30/237646494.jpg', 0),
+(30, '/assets/10/30/303436833.jpg', 0),
+(30, '/assets/10/30/4a02aa5e5cc005e16e7c0bcb00d3c407.webp', 0),
+(30, '/assets/10/30/4a3fcc336e0ca42056e567f6fe1cb5d4.webp', 0);
+
+INSERT INTO `notifications` (`user_id`, `type`, `message`, `read`) VALUES
+(3, 'system', 'Welcome to HaNoi Booking!', 0);
+
+SELECT 'hotel_management database created successfully' AS status;

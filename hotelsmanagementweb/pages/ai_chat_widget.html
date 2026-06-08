@@ -1,0 +1,468 @@
+<style>
+    .ai-chat-toggle-wrap {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 2147483000;
+        font-family: 'Poppins', sans-serif;
+    }
+
+    .ai-chat-label {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 9px 15px;
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(79, 70, 229, 0.28);
+        white-space: nowrap;
+    }
+
+    #ai-chat-toggle {
+        width: 58px;
+        height: 58px;
+        border: 0;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        box-shadow: 0 12px 30px rgba(79, 70, 229, 0.38);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        position: relative;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #ai-chat-toggle:hover {
+        transform: translateY(-2px) scale(1.04);
+        box-shadow: 0 16px 36px rgba(79, 70, 229, 0.46);
+    }
+
+    #ai-chat-toggle i {
+        font-size: 24px;
+    }
+
+    .ai-chat-badge {
+        position: absolute;
+        right: -2px;
+        top: -2px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+        border: 2px solid #fff;
+    }
+
+    #ai-chat-window {
+        position: fixed;
+        right: 24px;
+        bottom: 96px;
+        width: min(380px, calc(100vw - 32px));
+        height: min(560px, calc(100vh - 190px));
+        border-radius: 20px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(21, 44, 91, 0.22);
+        border: 1px solid rgba(79, 70, 229, 0.12);
+        display: none;
+        flex-direction: column;
+        z-index: 2147483000;
+        font-family: 'Poppins', sans-serif;
+    }
+
+    #ai-chat-window.open {
+        display: flex;
+    }
+
+    .ai-chat-head {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #fff;
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .ai-chat-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .ai-chat-title strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.2;
+    }
+
+    .ai-chat-title span {
+        display: block;
+        font-size: 11px;
+        opacity: 0.86;
+        margin-top: 2px;
+    }
+
+    .ai-chat-close {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+    }
+
+    .ai-chat-messages {
+        flex: 1;
+        padding: 16px;
+        overflow-y: auto;
+        background: #f8fafc;
+    }
+
+    .ai-chat-message {
+        display: flex;
+        margin-bottom: 12px;
+    }
+
+    .ai-chat-message.user {
+        justify-content: flex-end;
+    }
+
+    .ai-chat-bubble {
+        max-width: 82%;
+        padding: 10px 13px;
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: #152c5b;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(21, 44, 91, 0.08);
+        word-break: break-word;
+    }
+
+    .ai-chat-message.user .ai-chat-bubble {
+        color: #fff;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        box-shadow: none;
+    }
+
+    .ai-chat-quick {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 11px 12px;
+        border-top: 1px solid #edf2f7;
+        background: #fff;
+    }
+
+    .ai-chat-quick button,
+    .ai-chat-location {
+        min-height: 34px;
+        border: 1px solid #dbe4ff;
+        border-radius: 999px;
+        background: #f5f7ff;
+        color: #3451d1;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 10px;
+    }
+
+    .ai-chat-input-row {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-top: 1px solid #edf2f7;
+        background: #fff;
+    }
+
+    #ai-chat-input {
+        min-width: 0;
+        flex: 1;
+        height: 42px;
+        border: 1px solid #dbe4ff;
+        border-radius: 999px;
+        padding: 0 14px;
+        outline: none;
+        color: #152c5b;
+        font-size: 13px;
+    }
+
+    #ai-chat-input:focus {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+
+    #ai-chat-send {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #fff;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+    }
+
+    #ai-chat-send:disabled {
+        opacity: 0.6;
+        cursor: wait;
+    }
+
+    @media (max-width: 640px) {
+        .ai-chat-toggle-wrap {
+            right: 16px;
+            bottom: 18px;
+        }
+
+        .ai-chat-label {
+            display: none;
+        }
+
+        #ai-chat-window {
+            right: 12px;
+            bottom: 88px;
+            width: calc(100vw - 24px);
+            height: min(560px, calc(100vh - 176px));
+            border-radius: 18px;
+        }
+    }
+</style>
+
+<div class="ai-chat-toggle-wrap" id="ai-chat-toggle-wrap">
+    <span class="ai-chat-label">Hỗ trợ AI</span>
+    <button id="ai-chat-toggle" type="button" onclick="toggleAiChat()" title="AI Booking Assistant">
+        <i class="fas fa-comments"></i>
+        <span class="ai-chat-badge" id="ai-chat-badge">1</span>
+    </button>
+</div>
+
+<div id="ai-chat-window" aria-label="AI Booking Assistant">
+    <div class="ai-chat-head">
+        <div class="ai-chat-title">
+            <i class="fas fa-robot"></i>
+            <div>
+                <strong>AI Booking Assistant</strong>
+                <span>Tư vấn khách sạn, phòng và đặt chỗ</span>
+            </div>
+        </div>
+        <button class="ai-chat-close" type="button" onclick="toggleAiChat()" title="Đóng">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <div class="ai-chat-messages" id="ai-chat-messages">
+        <div class="ai-chat-message bot">
+            <div class="ai-chat-bubble">
+                Xin chào! Tôi có thể giúp bạn tìm khách sạn phù hợp, kiểm tra phòng trống hoặc hỗ trợ đặt phòng.
+            </div>
+        </div>
+    </div>
+
+    <div class="ai-chat-quick">
+        <button type="button" onclick="aiChatRequestLocation()">
+            <i class="fas fa-location-crosshairs"></i> Gần tôi
+        </button>
+        <button type="button" onclick="aiQuickAction('Tôi muốn đặt phòng')">
+            <i class="fas fa-calendar-check"></i> Đặt phòng
+        </button>
+        <button type="button" onclick="aiQuickAction('Kiểm tra booking của tôi')">
+            <i class="fas fa-receipt"></i> Booking
+        </button>
+    </div>
+
+    <div class="ai-chat-input-row">
+        <input id="ai-chat-input" type="text" placeholder="Nhập câu hỏi của bạn..." autocomplete="off">
+        <button id="ai-chat-send" type="button" onclick="sendAiChatMessage()" title="Gửi">
+            <i class="fas fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+
+<script>
+    (function () {
+        if (window.aiChatWidgetLoaded) return;
+        window.aiChatWidgetLoaded = true;
+
+        let userLat = null;
+        let userLng = null;
+        const chatHistory = [];
+
+        function byId(id) {
+            return document.getElementById(id);
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatBotText(text) {
+            return escapeHtml(text)
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function addMessage(text, type) {
+            const messages = byId('ai-chat-messages');
+            if (!messages) return null;
+
+            const message = document.createElement('div');
+            message.className = 'ai-chat-message ' + type;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'ai-chat-bubble';
+            if (type === 'bot') {
+                bubble.innerHTML = formatBotText(text);
+            } else {
+                bubble.textContent = text;
+            }
+
+            message.appendChild(bubble);
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight;
+            return message;
+        }
+
+        function setLoading(isLoading) {
+            const sendButton = byId('ai-chat-send');
+            const input = byId('ai-chat-input');
+            if (sendButton) sendButton.disabled = isLoading;
+            if (input) input.disabled = isLoading;
+        }
+
+        function remember(role, content) {
+            chatHistory.push({ role, content });
+            if (chatHistory.length > 12) chatHistory.shift();
+        }
+
+        function shouldSendLocation(message) {
+            return Boolean(userLat && userLng && /gần|near|quanh|xung quanh|vị trí|gan toi/i.test(message));
+        }
+
+        async function sendMessage(text, forceNearby) {
+            const input = byId('ai-chat-input');
+            const message = (text || (input ? input.value : '') || '').trim();
+            if (!message) return;
+
+            if (input) input.value = '';
+            addMessage(message, 'user');
+            remember('user', message);
+
+            const typing = addMessage('Đang trả lời...', 'bot');
+            setLoading(true);
+
+            try {
+                const useLocation = forceNearby || shouldSendLocation(message);
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        history: chatHistory,
+                        lat: useLocation ? userLat : null,
+                        lng: useLocation ? userLng : null,
+                        is_nearby: useLocation
+                    })
+                });
+
+                const data = await response.json();
+                const reply = data.reply || data.message || 'Tôi chưa có câu trả lời phù hợp lúc này.';
+                if (typing) typing.remove();
+                addMessage(reply, 'bot');
+                remember('bot', reply);
+            } catch (error) {
+                if (typing) typing.remove();
+                addMessage('Không kết nối được trợ lý AI. Vui lòng thử lại sau.', 'bot');
+            } finally {
+                setLoading(false);
+                if (input) input.focus();
+            }
+        }
+
+        window.toggleAiChat = function () {
+            const chatWindow = byId('ai-chat-window');
+            const badge = byId('ai-chat-badge');
+            if (!chatWindow) return;
+            chatWindow.classList.toggle('open');
+            if (badge) badge.style.display = 'none';
+            if (chatWindow.classList.contains('open')) {
+                const input = byId('ai-chat-input');
+                if (input) setTimeout(function () { input.focus(); }, 80);
+            }
+        };
+
+        window.aiQuickAction = function (text) {
+            const chatWindow = byId('ai-chat-window');
+            if (chatWindow && !chatWindow.classList.contains('open')) {
+                window.toggleAiChat();
+            }
+            sendMessage(text, false);
+        };
+
+        window.aiChatRequestLocation = function () {
+            const chatWindow = byId('ai-chat-window');
+            if (chatWindow && !chatWindow.classList.contains('open')) {
+                window.toggleAiChat();
+            }
+
+            if (!navigator.geolocation) {
+                addMessage('Trình duyệt của bạn chưa hỗ trợ lấy vị trí.', 'bot');
+                return;
+            }
+
+            addMessage('Tôi đang xin quyền lấy vị trí để tìm khách sạn gần bạn.', 'bot');
+            navigator.geolocation.getCurrentPosition(function (position) {
+                userLat = position.coords.latitude;
+                userLng = position.coords.longitude;
+                sendMessage('Tìm khách sạn gần vị trí hiện tại của tôi', true);
+            }, function () {
+                addMessage('Không lấy được vị trí. Bạn có thể nhập khu vực muốn tìm khách sạn.', 'bot');
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000
+            });
+        };
+
+        window.sendAiChatMessage = function () {
+            sendMessage('', false);
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = byId('ai-chat-input');
+            if (!input) return;
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    sendMessage('', false);
+                }
+            });
+        });
+    })();
+</script>

@@ -672,7 +672,7 @@
         function displaySearchResults(hotels) {
             return hotels.map(hotel => `
                 <div class="hotel-card" onclick="window.location.href='/hotel/${hotel.hotel_id}'">
-                    <img src="${hotel.image_path || '/assets/image/default-room.jpg'}" alt="${hotel.hotel_name}" class="hotel-image">
+                    <img src="${hotel.image_path || '/assets/image/default-hotel.webp'}" alt="${hotel.hotel_name}" class="hotel-image">
                     <div class="hotel-info">
                         <h3 class="hotel-name">${hotel.hotel_name}</h3>
                         <p class="hotel-location">${hotel.location}</p>

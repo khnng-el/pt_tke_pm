@@ -4,7 +4,16 @@ Flask-Mail
 Flask-Migrate
 Flask-SQLAlchemy
 SQLAlchemy
-mysql-connector-python
 PyMySQL
 Werkzeug
 alembic
+cryptography
+python-dotenv
+google-genai
+langgraph
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-chroma
+chromadb
+mysql-connector-python

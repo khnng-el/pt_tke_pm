@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # Load .env từ chatbot_system (chứa GEMINI_API_KEY)
 env_path = os.path.join(os.path.dirname(__file__), '..', 'chatbot_system', '.env')
-load_dotenv(env_path)
+load_dotenv(env_path, override=not bool(os.getenv("GEMINI_API_KEY")))
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import AIMessage

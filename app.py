@@ -12,16 +12,14 @@ from utils import (
     send_verification_email, send_password_reset_email
 )
 import re
-from sqlalchemy import text, inspect
+from sqlalchemy import bindparam, text, inspect
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required, UserMixin
 from sqlalchemy.sql import func
 import locale
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from config import DATABASE_URI
+from config import DATABASE_URI, DB_AUTO_CREATE
 from contextlib import contextmanager
 import secrets
 from flask_mail import Mail, Message
@@ -30,13 +28,14 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 import unicodedata
+from sqlalchemy.exc import OperationalError
 
 app = Flask(__name__, 
     template_folder='hotelsmanagementweb/pages',
     static_folder='hotelsmanagementweb',
     static_url_path=''
 )
-app.secret_key = 'your-secret-key'  # Thay thế bằng secret key của bạn
+app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
 app.permanent_session_lifetime = timedelta(days=7)  # Thời gian lưu session
 app.config['SESSION_COOKIE_SECURE'] = False  # True chỉ khi dùng HTTPS (production)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -52,9 +51,13 @@ app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'khanhsctb@gmail.com'  # Thay thế bằng email của bạn
-app.config['MAIL_PASSWORD'] = 'jksw xass tfik adky'  # Thay thế bằng mật khẩu ứng dụng Gmail
-app.config['MAIL_DEFAULT_SENDER'] = app.config['MAIL_USERNAME']
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
+app.config['MAIL_SUPPRESS_SEND'] = os.getenv(
+    'MAIL_SUPPRESS_SEND',
+    '1' if not app.config['MAIL_USERNAME'] else '0'
+).lower() in ('1', 'true', 'yes')
 mail = Mail(app)
 
 # Set locale cho định dạng số
@@ -83,9 +86,8 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 # Session setup for SQLAlchemy
-engine = create_engine(DATABASE_URI)
 Base.metadata.bind = engine
-db_session = scoped_session(sessionmaker(bind=engine))
+db_session = get_db()
 
 @app.teardown_appcontext
 def cleanup(resp_or_exc):
@@ -103,6 +105,8 @@ def handle_error(e):
         return e.get_response()
     db_session.rollback()
     app.logger.error(f"Unhandled error: {str(e)}")
+    if isinstance(e, OperationalError):
+        return "Database connection error. Please check your database configuration.", 500
     return "An error occurred. Please try again.", 500
 
 @app.before_request
@@ -154,7 +158,7 @@ def load_user(user_id):
     if not user_id:
         return None
     try:
-        return db_session.query(User).get(int(user_id))
+        return db_session.get(User, int(user_id))
     except (ValueError, TypeError):
         return None
 
@@ -215,6 +219,223 @@ def process_image_path(image_path):
         
     return image_path
 
+
+SERVICE_ICON_MAP = {
+    'Free Wi-Fi': 'fas fa-wifi',
+    'Breakfast Included': 'fas fa-mug-saucer',
+    'Dinner Included': 'fas fa-utensils',
+    'Ocean View': 'fas fa-water',
+    'Sea View': 'fas fa-water',
+    'Beach Access': 'fas fa-umbrella-beach',
+    'Pool Access': 'fas fa-person-swimming',
+    'Spa Access': 'fas fa-spa',
+    'Gym Access': 'fas fa-dumbbell',
+    'Room Service': 'fas fa-concierge-bell',
+    'Airport Transfer': 'fas fa-shuttle-van',
+    'City View': 'fas fa-city',
+    'Balcony': 'fas fa-door-open',
+    'Private Pool': 'fas fa-person-swimming',
+    'Family Friendly': 'fas fa-children',
+    'Minibar': 'fas fa-wine-glass',
+    'Smart TV': 'fas fa-tv',
+    'Coffee/Tea Maker': 'fas fa-mug-hot',
+    'Air conditioning': 'fas fa-snowflake',
+    'In-room safe': 'fas fa-vault',
+    'On-site Restaurant': 'fas fa-utensils',
+    'Bar / Lounge': 'fas fa-martini-glass-citrus',
+    'Mountain View': 'fas fa-mountain-sun',
+}
+
+DEFAULT_ROOM_SERVICES = [
+    'Free Wi-Fi',
+    'Air conditioning',
+    'Smart TV',
+    'Minibar',
+    'Coffee/Tea Maker',
+]
+
+
+def get_service_icon(service_name):
+    return SERVICE_ICON_MAP.get(service_name, 'fas fa-check')
+
+
+def infer_room_view(room_type):
+    lowered = (room_type or '').lower()
+    if any(word in lowered for word in ['sea', 'ocean', 'beachfront']):
+        return 'Ocean View'
+    if 'pool' in lowered:
+        return 'Pool View'
+    if 'balcony' in lowered:
+        return 'Balcony View'
+    return 'City View'
+
+
+def infer_room_bed(room_type):
+    lowered = (room_type or '').lower()
+    if 'family' in lowered or 'three-bedroom' in lowered:
+        return 'Multiple Beds'
+    if 'two-bedroom' in lowered:
+        return '2 Bedrooms'
+    if 'twin' in lowered:
+        return '2 Twin Beds'
+    return '1 King Bed'
+
+
+def infer_room_size(room_type):
+    lowered = (room_type or '').lower()
+    if 'three-bedroom' in lowered:
+        return 150
+    if 'two-bedroom' in lowered:
+        return 110
+    if 'villa' in lowered:
+        return 90
+    if 'suite' in lowered:
+        return 65
+    if 'family' in lowered:
+        return 55
+    return 35
+
+
+def build_amenity_groups(service_names):
+    normalized = {name for name in service_names if name}
+
+    in_room = [
+        'Free Wi-Fi',
+        'Air conditioning',
+        'Smart TV',
+        'Minibar',
+        'Coffee/Tea Maker',
+        'In-room safe',
+    ]
+    relaxation = [
+        'Pool Access',
+        'Spa Access',
+        'Gym Access',
+        'Beach Access',
+        'Private Pool',
+        'Ocean View',
+    ]
+    dining = [
+        'Breakfast Included',
+        'Dinner Included',
+        'Room Service',
+        'On-site Restaurant',
+        'Bar / Lounge',
+    ]
+
+    def build_items(names, fallback_names):
+        merged = []
+        for name in names + fallback_names:
+            if name not in merged:
+                merged.append(name)
+        return [{'name': name, 'icon': get_service_icon(name)} for name in merged[:8]]
+
+    service_list = sorted(normalized)
+    return [
+        {
+            'title': 'In-Room Services',
+            'icon': 'fas fa-bed',
+            'items': build_items([s for s in service_list if s in in_room], in_room),
+        },
+        {
+            'title': 'Relaxation & Recreation',
+            'icon': 'fas fa-spa',
+            'items': build_items([s for s in service_list if s in relaxation], relaxation),
+        },
+        {
+            'title': 'Dining & Entertainment',
+            'icon': 'fas fa-utensils',
+            'items': build_items([s for s in service_list if s in dining], dining),
+        },
+    ]
+
+
+DESCRIPTION_MIN_LENGTH = 220
+
+
+def join_summary(items, fallback):
+    unique_items = []
+    for item in items:
+        if item and item not in unique_items:
+            unique_items.append(item)
+    if not unique_items:
+        return fallback
+    return ', '.join(unique_items[:5])
+
+
+def build_hotel_description(hotel, hotel_display_location, rooms, service_names):
+    base_description = (hotel.descriptions or '').strip()
+    if len(base_description) >= DESCRIPTION_MIN_LENGTH:
+        return base_description
+
+    room_summary = join_summary(
+        [getattr(room, 'room_type', '') for room in rooms or []],
+        'comfortable room options'
+    )
+    preferred_services = [
+        'Free Wi-Fi',
+        'Breakfast Included',
+        'Ocean View',
+        'Beach Access',
+        'Pool Access',
+        'Spa Access',
+        'Room Service',
+        'Smart TV',
+        'Coffee/Tea Maker',
+    ]
+    available_services = {service_name for service_name in service_names if service_name}
+    service_summary = join_summary(
+        [service for service in preferred_services if service in available_services]
+        + sorted(available_services - set(preferred_services)),
+        'essential guest services'
+    )
+    supplemental = (
+        f"Guests can choose from {room_summary}, with highlights such as {service_summary}. "
+        f"The property is suitable for couples, families and business travelers who want "
+        f"a comfortable stay near {hotel_display_location}, clear pricing and convenient "
+        f"access to local attractions."
+    )
+
+    if base_description:
+        return f"{base_description} {supplemental}"
+    return f"{hotel.hotel_name} is a well-located stay in {hotel_display_location}. {supplemental}"
+
+
+def get_owner_scope():
+    """Return hotels/rooms an owner can manage.
+
+    In the seed data all hotels belong to the sample owner. If a newly-created
+    OWNER account has no assigned hotels yet, keep the management screens useful
+    by showing the existing project hotels instead of an empty dashboard.
+    """
+    hotels = db_session.query(Hotel).filter_by(owner_id=current_user.user_id).order_by(Hotel.hotel_id).all()
+    uses_fallback = False
+    if not hotels:
+        hotels = db_session.query(Hotel).order_by(Hotel.hotel_id).all()
+        uses_fallback = True
+
+    hotel_ids = [hotel.hotel_id for hotel in hotels]
+    rooms = []
+    if hotel_ids:
+        rooms = db_session.query(Room).filter(Room.hotel_id.in_(hotel_ids)).order_by(Room.hotel_id, Room.room_id).all()
+
+    return {
+        'hotels': hotels,
+        'hotel_ids': hotel_ids,
+        'rooms': rooms,
+        'room_ids': [room.room_id for room in rooms],
+        'uses_fallback': uses_fallback,
+    }
+
+
+def owner_can_access_hotel(hotel_id):
+    if not current_user.is_authenticated or not current_user.is_owner:
+        return False
+    owned_hotel = db_session.query(Hotel).filter_by(hotel_id=hotel_id, owner_id=current_user.user_id).first()
+    if owned_hotel:
+        return True
+    return db_session.query(Hotel).filter_by(owner_id=current_user.user_id).count() == 0
+
 # Đảm bảo file log tồn tại
 if not os.path.exists('app.log'):
     open('app.log', 'a').close()
@@ -230,6 +451,19 @@ if app.logger.hasHandlers():
 
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.DEBUG)
+
+
+def initialize_database():
+    if not DB_AUTO_CREATE:
+        app.logger.info("Database auto-create disabled; using existing schema/data.")
+        return
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        app.logger.warning(f"Database initialization skipped: {exc}")
+
+
+initialize_database()
 
 # Route cho trang chủ
 @app.route('/')
@@ -350,7 +584,7 @@ def home():
 def login():
     if request.method == 'POST':
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             username = data.get('username')
             password = data.get('password')
             remember = data.get('remember', False)
@@ -471,13 +705,13 @@ def book_room(room_id):
     room = get_room_by_id(db_session, room_id)
     if not room:
         flash('Không tìm thấy phòng', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('home'))
     
     # Lấy thông tin khách sạn
     hotel = db_session.query(Hotel).filter(Hotel.hotel_id == room.hotel_id).first()
     if not hotel:
         flash('Không tìm thấy thông tin khách sạn', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('home'))
     
     # Lấy ảnh phòng
     room_images = db_session.execute(
@@ -495,7 +729,7 @@ def book_room(room_id):
             image_path = '/' + image_path
         processed_images.append({'image_path': image_path})
     if not processed_images:
-        processed_images = [{'image_path': '/hotelsmanagementweb/assets/image/default-room.jpg'}]
+        processed_images = [{'image_path': '/assets/image/default-hotel.webp'}]
     
     # Lấy services của phòng
     services = db_session.query(Service).filter(Service.room_id == room_id).all()
@@ -520,14 +754,23 @@ def book_room(room_id):
     avg_rating = db_session.query(func.avg(Review.rating)).filter(Review.hotel_id == hotel.hotel_id).scalar() or 0
         
     if request.method == 'POST':
-        check_in = datetime.strptime(request.form.get('check_in'), '%Y-%m-%d')
-        check_out = datetime.strptime(request.form.get('check_out'), '%Y-%m-%d')
-        num_rooms = int(request.form.get('num_rooms', 1) or 1)
-        num_nights = int(request.form.get('num_nights', 1) or 1)
-        total_price = float(request.form.get('total_price', 0) or 0)
+        try:
+            check_in = datetime.strptime(request.form.get('check_in'), '%Y-%m-%d')
+            check_out = datetime.strptime(request.form.get('check_out'), '%Y-%m-%d')
+            num_rooms = int(request.form.get('num_rooms', 1) or 1)
+        except (TypeError, ValueError):
+            flash('Thông tin đặt phòng không hợp lệ!', 'error')
+            return redirect(url_for('home'))
+
+        if check_out <= check_in or num_rooms < 1:
+            flash('Thông tin đặt phòng không hợp lệ!', 'error')
+            return redirect(url_for('home'))
+
+        num_nights = (check_out - check_in).days
+        total_price = int(room.price * 0.9 * 1.05 * num_nights * num_rooms)
         if room.availableRooms is None or room.availableRooms < num_rooms:
             flash('Không đủ phòng trống!', 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('home'))
         booking = Booking(
             user_id=current_user.user_id,
             room_id=room_id,
@@ -568,7 +811,7 @@ def booking_details(booking_id):
     booking = get_booking_by_id(db_session, booking_id)
     if not booking or booking.user_id != current_user.user_id:
         flash('Không tìm thấy thông tin đặt phòng', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('home'))
     user = db_session.query(User).filter_by(user_id=booking.user_id).first()
     return render_template('booking_details.html', booking=booking, user=user)
 
@@ -594,7 +837,7 @@ def review_hotel(hotel_id):
         return redirect(url_for('hotel_details', hotel_id=hotel_id))
         
     try:
-        review = create_review(db_session, session['user_id'], hotel_id, rating, comment)
+        review = create_review(db_session, current_user.user_id, hotel_id, rating, comment)
         flash('Đánh giá thành công!', 'success')
     except Exception as e:
         db_session.rollback()
@@ -634,18 +877,20 @@ def hotel_details(hotel_id):
         if not hotel_image_urls:
             hotel_image_urls = ['/assets/image/default-hotel.webp']
         
-        # Format location từ address_hotel
+        # Format location từ address_hotel. Không gán vào hotel.location vì đây
+        # là relationship SQLAlchemy tới bảng hotel_locations.
         location_parts = hotel.address_hotel.split(',')
         if len(location_parts) >= 2:
-            hotel.location = f"{location_parts[-2].strip()}, {location_parts[-1].strip()}"
+            hotel_display_location = f"{location_parts[-2].strip()}, {location_parts[-1].strip()}"
         else:
-            hotel.location = hotel.address_hotel
-        
+            hotel_display_location = hotel.address_hotel
+
         # Lấy đánh giá khách sạn và sắp xếp theo review_id
         reviews = db_session.query(Review).filter(Review.hotel_id == hotel_id).order_by(Review.review_id.desc()).limit(5).all()
         
         # Thêm thông tin cho mỗi phòng
         processed_rooms = []
+        hotel_service_names = set()
         for room in rooms:
             # Tính giá sau khi giảm 10%
             original_price = room.price
@@ -660,9 +905,9 @@ def hotel_details(hotel_id):
                 'original_price': original_price,  # Giá gốc
                 'discount_percent': discount_percent,  # Phần trăm giảm giá
                 'max_guests': 2,
-                'room_size': 30,
-                'view_type': "City View",
-                'bed_type': "1 King Bed",
+                'room_size': infer_room_size(room.room_type),
+                'view_type': infer_room_view(room.room_type),
+                'bed_type': infer_room_bed(room.room_type),
                 'services': []
             }
             
@@ -684,22 +929,36 @@ def hotel_details(hotel_id):
                 
             # Nếu không có ảnh, sử dụng ảnh mặc định
             if not room_dict['images']:
-                room_dict['images'] = ['/assets/image/default-room.webp']
+                room_dict['images'] = ['/assets/image/default-hotel.webp']
                 
             # Sử dụng ảnh đầu tiên làm ảnh chính
             room_dict['image_url'] = room_dict['images'][0]
                 
             # Lấy danh sách dịch vụ của phòng
             services = db_session.query(Service).filter(Service.room_id == room.room_id).all()
+            service_names = [service.serviceName for service in services]
+            if not service_names:
+                service_names = list(DEFAULT_ROOM_SERVICES)
+                if room_dict['view_type'] not in service_names:
+                    service_names.append(room_dict['view_type'])
+            hotel_service_names.update(service_names)
             room_dict['services'] = [
                 {
-                    'serviceName': service.serviceName,
-                    'icon': 'fas fa-check'
+                    'serviceName': service_name,
+                    'icon': get_service_icon(service_name),
+                    'is_included': True,
                 }
-                for service in services
+                for service_name in service_names
             ]
             
             processed_rooms.append(room_dict)
+
+        hotel_description = build_hotel_description(
+            hotel,
+            hotel_display_location,
+            rooms,
+            hotel_service_names
+        )
         
         if first_room:
             first_room_dict = processed_rooms[0]
@@ -713,6 +972,9 @@ def hotel_details(hotel_id):
         
         return render_template('detailroom.html', 
                              hotel=hotel,
+                             hotel_display_location=hotel_display_location,
+                             hotel_description=hotel_description,
+                             amenity_groups=build_amenity_groups(hotel_service_names),
                              images=hotel_image_urls,
                              rooms=processed_rooms,
                              room=first_room_dict,
@@ -747,13 +1009,9 @@ def user_profile():
             {"room_id": b.room_id}
         ).fetchone()
         if room_image and room_image[0]:
-            image_url = room_image[0].replace('\\', '/')
-            if not image_url.startswith('/'):
-                image_url = '/' + image_url
-            if 'hotelsmanagementweb' not in image_url:
-                image_url = '/hotelsmanagementweb/' + image_url.lstrip('/')
+            image_url = process_image_path(room_image[0])
         else:
-            image_url = '/assets/image/default-room.webp'
+            image_url = '/assets/image/default-hotel.webp'
         b.image_url = image_url
     # Lấy danh sách payment/giao dịch
     user_booking_ids = [b.booking_id for b in bookings]
@@ -783,32 +1041,28 @@ def get_room_images(room_id):
     
     # Nếu không có ảnh, trả về ảnh mặc định
     if not image_urls:
-        image_urls = ['/assets/image/default-room.webp']
+        image_urls = ['/assets/image/default-hotel.webp']
     
     return jsonify(image_urls)
 
 @app.route('/api/room-services/<int:room_id>')
 def get_room_services(room_id):
     services = db_session.query(Service).filter(Service.room_id == room_id).all()
-    
-    service_icons = {
-        'Breakfast': 'fas fa-coffee',
-        'Dinner': 'fas fa-utensils',
-        'Free WiFi': 'fas fa-wifi',
-        'Gym Access': 'fas fa-dumbbell',
-        'Pool Access': 'fas fa-swimming-pool',
-        'Room Service': 'fas fa-concierge-bell',
-        'Airport Transfer': 'fas fa-shuttle-van',
-        'Spa Access': 'fas fa-spa',
-        'Free Parking': 'fas fa-parking',
-        'Beach Access': 'fas fa-umbrella-beach'
-    }
-    
+    service_names = [service.serviceName for service in services]
+    if not service_names:
+        room = db_session.query(Room).filter(Room.room_id == room_id).first()
+        if not room:
+            abort(404)
+        service_names = list(DEFAULT_ROOM_SERVICES)
+        view_type = infer_room_view(room.room_type)
+        if view_type not in service_names:
+            service_names.append(view_type)
+
     service_list = []
-    for service in services:
+    for service_name in service_names:
         service_list.append({
-            'name': service.serviceName,
-            'icon': service_icons.get(service.serviceName, 'fas fa-check'),
+            'name': service_name,
+            'icon': get_service_icon(service_name),
             'is_included': True  # You can modify this based on your logic
         })
     
@@ -824,37 +1078,52 @@ def create_payment():
     # Lấy dữ liệu từ form gửi lên
     hotel_id = request.form.get('hotel_id')
     room_id = request.form.get('room_id')
-    check_in = request.form.get('check_in')
-    check_out = request.form.get('check_out')
-    num_rooms = int(request.form.get('num_rooms', 1))
-    num_nights = int(request.form.get('num_nights'))
-    total_price = float(request.form.get('total_price'))
+    try:
+        room_id_int = int(room_id)
+        check_in = datetime.strptime(request.form.get('check_in'), '%Y-%m-%d')
+        check_out = datetime.strptime(request.form.get('check_out'), '%Y-%m-%d')
+        num_rooms = int(request.form.get('num_rooms', 1) or 1)
+    except (TypeError, ValueError):
+        flash('Thông tin đặt phòng không hợp lệ!', 'error')
+        return redirect(url_for('home'))
+
+    if check_out <= check_in or num_rooms < 1:
+        flash('Thông tin đặt phòng không hợp lệ!', 'error')
+        return redirect(url_for('home'))
+
     user_id = current_user.user_id  # Lấy user_id từ user đã đăng nhập
+
+    room = db_session.query(Room).filter_by(room_id=room_id_int).first()
+    if not room or room.availableRooms is None or room.availableRooms < num_rooms:
+        db_session.rollback()
+        flash('Không đủ phòng trống!', 'error')
+        return redirect(url_for('home'))
+
+    nights = (check_out - check_in).days
+    total_price = int(room.price * 0.9 * 1.05 * nights * num_rooms)
 
     # Lưu vào DB
     booking = Booking(
         user_id=user_id,
-        room_id=room_id,
-        check_in=datetime.strptime(check_in, '%Y-%m-%d'),
-        check_out=datetime.strptime(check_out, '%Y-%m-%d'),
+        room_id=room_id_int,
+        check_in=check_in,
+        check_out=check_out,
         total_price=total_price,
         num_rooms=num_rooms,
         status='pending',
         created_at=datetime.now()
     )
     db_session.add(booking)
-    room = db_session.query(Room).filter_by(room_id=room_id).first()
-    if room.availableRooms is None or room.availableRooms < num_rooms:
-        flash('Không đủ phòng trống!', 'error')
-        return redirect(url_for('index'))
     room.availableRooms = int(room.availableRooms or 0) - int(num_rooms or 0)
     db_session.commit()
 
-    # Lấy thông tin để render ra payment.html
-    room = Room.query.get(room_id)
-    hotel = Hotel.query.get(hotel_id)
-    user = db_session.query(User).filter_by(user_id=booking.user_id).first()
-    return render_template('payment.html', booking=booking, room=room, hotel=hotel, nights=num_nights, user=user)
+    return f'''
+    <form id="payForm" action="/vnpay_pay" method="POST">
+        <input type="hidden" name="booking_id" value="{booking.booking_id}">
+        <input type="hidden" name="total_price" value="{booking.total_price}">
+    </form>
+    <script>document.getElementById('payForm').submit();</script>
+    '''
 
 @app.route('/booking/confirmation/<int:booking_id>')
 @login_required
@@ -882,7 +1151,7 @@ def extract_province(address):
 @app.route('/search', methods=['POST'])
 def search_hotels():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         required_fields = ['location', 'check_in_date', 'check_out_date', 'required_rooms']
         for field in required_fields:
             if field not in data:
@@ -912,8 +1181,6 @@ def search_hotels():
                 or location_search_nospace in province_nospace or location_search_nospace in address_nospace
                 or province_nospace in location_search_nospace):
                 filtered_hotels.append(h)
-            else:
-                print(f"[NOT MATCH] location_search: '{location_search}' not in province: '{province}' and not in address: '{address}'")
         hotel_ids = [h.hotel_id for h in filtered_hotels]
         if not hotel_ids:
             return jsonify({'hotels': [], 'total': 0, 'nights': nights})
@@ -949,10 +1216,11 @@ def search_hotels():
         FROM RoomAvailability
         ORDER BY rating DESC, min_price ASC
         """
+        statement = text(query).bindparams(bindparam('hotel_ids', expanding=True))
         result = db_session.execute(
-            text(query), 
+            statement,
             {
-                'hotel_ids': tuple(hotel_ids),
+                'hotel_ids': hotel_ids,
                 'check_in': check_in,
                 'check_out': check_out,
                 'required_rooms': data['required_rooms']
@@ -976,7 +1244,7 @@ def search_hotels():
                 'hotel_name': row.hotel_name,
                 'location': row.location,
                 'rating': float(row.rating),
-                'image_path': image_path or '/assets/image/default-room.jpg',
+                'image_path': image_path or '/assets/image/default-hotel.webp',
                 'min_price': float(row.min_price) if row.min_price else 0,
                 'available_rooms': row.available_rooms,
                 'total_rooms': row.total_rooms
@@ -1044,7 +1312,7 @@ def search_hotels_by_name():
                 'hotel_name': row.hotel_name,
                 'location': row.location,
                 'rating': float(row.rating),
-                'image_path': image_path or '/assets/image/default-room.jpg',
+                'image_path': image_path or '/assets/image/default-hotel.webp',
                 'min_price': float(row.min_price) if row.min_price else 0,
                 'available_rooms': row.available_rooms or 0,
                 'total_rooms': row.total_rooms or 0
@@ -1285,8 +1553,8 @@ def change_password():
     return render_template('change_password.html')
 
 VNPAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
-VNP_TMN_CODE = 'U0DUG7RM'
-VNP_HASH_SECRET = 'HHY7JSVLHOCCD7MU0208SN9M56PL8FZZ'
+VNP_TMN_CODE = os.getenv('VNP_TMN_CODE', '')
+VNP_HASH_SECRET = os.getenv('VNP_HASH_SECRET', '')
 
 def build_vnpay_query_and_hash(vnp_params, secret_key):
     sorted_items = sorted(
@@ -1310,8 +1578,31 @@ def vnpay_pay():
         flash('Vui lòng đặt phòng trước khi thanh toán!', 'error')
         return redirect(url_for('home'))
     booking_id = int(booking_id)
-    amount = float(request.form.get('total_price', 0))
-    amount_vnd = int(amount)
+
+    booking = db_session.query(Booking).filter_by(booking_id=booking_id).first()
+    if not booking:
+        flash('Không tìm thấy booking!', 'error')
+        return redirect(url_for('user_profile'))
+    if booking.user_id != current_user.user_id:
+        abort(403)
+    if booking.status not in ['pending', 'failed']:
+        flash('Booking này không còn ở trạng thái có thể thanh toán.', 'error')
+        return redirect(url_for('user_profile'))
+
+    if not VNP_TMN_CODE or not VNP_HASH_SECRET:
+        app.logger.error("VNPAY configuration is missing VNP_TMN_CODE or VNP_HASH_SECRET")
+        return "Cấu hình thanh toán VNPAY chưa sẵn sàng", 500
+
+    if booking.status == 'failed':
+        room = db_session.query(Room).filter_by(room_id=booking.room_id).first()
+        if not room or room.availableRooms is None or room.availableRooms < booking.num_rooms:
+            flash('Phòng này hiện không còn đủ chỗ để thanh toán lại.', 'error')
+            return redirect(url_for('user_profile'))
+        room.availableRooms = int(room.availableRooms or 0) - int(booking.num_rooms or 0)
+        booking.status = 'pending'
+        db_session.commit()
+
+    amount_vnd = int(booking.total_price or 0)
     if amount_vnd < 5000 or amount_vnd >= 1_000_000_000:
         return "Số tiền không hợp lệ (từ 5,000 đến dưới 1 tỷ đồng)", 400
     import random
@@ -1335,6 +1626,10 @@ def vnpay_pay():
         'vnp_CreateDate': datetime.now().strftime('%Y%m%d%H%M%S'),
     }
     query_string, vnp_secure_hash = build_vnpay_query_and_hash(vnp_params, VNP_HASH_SECRET)
+
+    db_session.query(Payment).filter_by(booking_id=booking_id).delete(synchronize_session=False)
+    db_session.flush()
+
     # Lưu thông tin vào bảng payment
     payment = Payment(
         txn_ref=order_id,
@@ -1351,6 +1646,10 @@ def vnpay_pay():
     return redirect(payment_url)
 
 def send_booking_success_email(user_email, booking_info):
+    if app.config.get('MAIL_SUPPRESS_SEND') or not app.config.get('MAIL_DEFAULT_SENDER'):
+        app.logger.info("Skipping booking confirmation email because mail sending is disabled.")
+        return
+
     subject = "Booking Confirmation - HaNoiBooking"
     body = f"""
     Dear Customer,
@@ -1433,6 +1732,10 @@ def vnpay_return():
             if payment.booking_id:
                 booking = db_session.query(Booking).filter_by(booking_id=payment.booking_id).first()
                 if booking:
+                    if booking.status != 'failed':
+                        room = db_session.query(Room).filter_by(room_id=booking.room_id).first()
+                        if room:
+                            room.availableRooms = int(room.availableRooms or 0) + int(booking.num_rooms or 0)
                     booking.status = 'failed'
                     db_session.commit()
         if vnp_ResponseCode == '00':
@@ -1488,7 +1791,7 @@ def api_user_bookings():
             text("SELECT image_path FROM room_images WHERE room_id = :room_id LIMIT 1"),
             {"room_id": b.room_id}
         ).fetchone()
-        image_url = '/assets/image/default-room.webp'
+        image_url = '/assets/image/default-hotel.webp'
         if room_image and room_image[0]:
             image_url = process_image_path(room_image[0])
 
@@ -1532,7 +1835,7 @@ def booking_hotel_room(hotel_id, room_id):
             image_path = '/' + image_path
         processed_images.append({'image_path': image_path})
     if not processed_images:
-        processed_images = [{'image_path': '/hotelsmanagementweb/assets/image/default-room.jpg'}]
+        processed_images = [{'image_path': '/assets/image/default-hotel.webp'}]
     return render_template('booking.html', hotel=hotel, room=room, room_images=processed_images)
 
 @app.route('/api/user/update', methods=['POST'])
@@ -1625,13 +1928,22 @@ def api_user_transactions():
 @app.route('/book_and_pay/<int:room_id>', methods=['POST'])
 @customer_required
 def book_and_pay(room_id):
-    check_in = datetime.strptime(request.form.get('check_in'), '%Y-%m-%d')
-    check_out = datetime.strptime(request.form.get('check_out'), '%Y-%m-%d')
-    num_rooms = int(request.form.get('num_rooms', 1) or 1)
-    total_price = float(request.form.get('total_price', 0) or 0)
+    try:
+        check_in = datetime.strptime(request.form.get('check_in'), '%Y-%m-%d')
+        check_out = datetime.strptime(request.form.get('check_out'), '%Y-%m-%d')
+        num_rooms = int(request.form.get('num_rooms', 1) or 1)
+    except (TypeError, ValueError):
+        return "Invalid booking data", 400
+
+    if check_out <= check_in or num_rooms < 1:
+        return "Invalid booking data", 400
+
     room = db_session.query(Room).filter_by(room_id=room_id).first()
     if not room or room.availableRooms is None or room.availableRooms < num_rooms:
         return "Not enough rooms available", 400
+
+    nights = (check_out - check_in).days
+    total_price = int(room.price * 0.9 * 1.05 * nights * num_rooms)
     booking = Booking(
         user_id=current_user.user_id,
         room_id=room_id,
@@ -1670,17 +1982,20 @@ def api_owner_booking_history():
     # Chỉ cho phép owner
     if not hasattr(current_user, 'role') or current_user.role.name.lower() != 'owner':
         return jsonify({'error': 'Permission denied'}), 403
-    # Lấy tất cả khách sạn của owner
-    hotels = db_session.query(Hotel).filter_by(owner_id=current_user.user_id).all()
-    hotel_ids = [h.hotel_id for h in hotels]
-    # Lấy tất cả phòng thuộc các khách sạn này
-    rooms = db_session.query(Room).filter(Room.hotel_id.in_(hotel_ids)).all()
+
+    scope = get_owner_scope()
+    hotels = scope['hotels']
+    rooms = scope['rooms']
+    room_ids = scope['room_ids']
     room_id_to_hotel = {room.room_id: room.hotel_id for room in rooms}
     room_id_to_type = {room.room_id: room.room_type for room in rooms}
     hotel_id_to_name = {hotel.hotel_id: hotel.hotel_name for hotel in hotels}
-    room_ids = list(room_id_to_hotel.keys())
+
     # Lấy tất cả booking của các phòng này
-    bookings = db_session.query(Booking).filter(Booking.room_id.in_(room_ids)).order_by(Booking.created_at.desc()).all()
+    bookings = []
+    if room_ids:
+        bookings = db_session.query(Booking).filter(Booking.room_id.in_(room_ids)).order_by(Booking.created_at.desc()).all()
+
     result = []
     for b in bookings:
         hotel_id = room_id_to_hotel.get(b.room_id)
@@ -1694,7 +2009,7 @@ def api_owner_booking_history():
             text("SELECT image_path FROM room_images WHERE room_id = :room_id LIMIT 1"),
             {"room_id": b.room_id}
         ).fetchone()
-        image_url = '/assets/image/default-room.webp'
+        image_url = '/assets/image/default-hotel.webp'
         if room_image and room_image[0]:
             image_url = room_image[0]
             if 'hotelsmanagementweb' in image_url:
@@ -1709,11 +2024,15 @@ def api_owner_booking_history():
         payment = db_session.query(Payment).filter_by(booking_id=b.booking_id).order_by(Payment.created_at.desc()).first()
         payment_status = payment.payment_status if payment and payment.payment_status else 'pending'
         result.append({
+            'booking_id': b.booking_id,
+            'hotel_id': hotel_id,
+            'room_id': b.room_id,
             'hotel_name': hotel_id_to_name.get(hotel_id, ''),
             'room_type': room_id_to_type.get(b.room_id, ''),
             'check_in': b.check_in.strftime('%Y-%m-%d') if b.check_in else '',
             'check_out': b.check_out.strftime('%Y-%m-%d') if b.check_out else '',
             'status': b.status,
+            'booking_status': b.status,
             'total_price': float(b.total_price) if b.total_price else 0,
             'booked_by': booked_by,
             'user_phone': user_phone,
@@ -1724,7 +2043,11 @@ def api_owner_booking_history():
             'image_url': image_url,
             'payment_status': payment_status
         })
-    return jsonify({'bookings': result})
+    return jsonify({
+        'bookings': result,
+        'managed_hotels': len(hotels),
+        'fallback_scope': scope['uses_fallback'],
+    })
 
 @app.route('/api/owner/room-types')
 @login_required
@@ -1732,12 +2055,12 @@ def api_owner_room_types():
     # Chỉ cho phép owner
     if not hasattr(current_user, 'role') or current_user.role.name.lower() != 'owner':
         return jsonify({'error': 'Permission denied'}), 403
-    # Lấy tất cả khách sạn của owner
-    hotels = db_session.query(Hotel).filter_by(owner_id=current_user.user_id).all()
-    hotel_ids = [h.hotel_id for h in hotels]
+
+    scope = get_owner_scope()
+    hotels = scope['hotels']
+    rooms = scope['rooms']
     hotel_id_to_name = {hotel.hotel_id: hotel.hotel_name for hotel in hotels}
-    # Lấy tất cả phòng thuộc các khách sạn này
-    rooms = db_session.query(Room).filter(Room.hotel_id.in_(hotel_ids)).all()
+
     result = []
     for r in rooms:
         # Lấy ảnh phòng
@@ -1745,58 +2068,141 @@ def api_owner_room_types():
             text("SELECT image_path FROM room_images WHERE room_id = :room_id LIMIT 1"),
             {"room_id": r.room_id}
         ).fetchone()
-        image_url = '/assets/image/default-room.webp'
+        image_url = '/assets/image/default-hotel.webp'
         if room_image and room_image[0]:
             image_url = room_image[0]
             if 'hotelsmanagementweb' in image_url:
                 image_url = image_url[image_url.index('hotelsmanagementweb')+len('hotelsmanagementweb'):]
             if not image_url.startswith('/'):
                 image_url = '/' + image_url
+        booking_counts = dict(
+            db_session.query(Booking.status, func.count(Booking.booking_id))
+            .filter(Booking.room_id == r.room_id)
+            .group_by(Booking.status)
+            .all()
+        )
         result.append({
+            'room_id': r.room_id,
+            'hotel_id': r.hotel_id,
             'room_type': r.room_type,
             'hotel_name': hotel_id_to_name.get(r.hotel_id, ''),
-            'availableRooms': r.availableRooms,
+            'availableRooms': int(r.availableRooms or 0),
+            'price': int(r.price or 0),
+            'pending_bookings': int(booking_counts.get('pending', 0)),
+            'success_bookings': int(booking_counts.get('success', 0)),
+            'failed_bookings': int(booking_counts.get('failed', 0)),
             'image_url': image_url
         })
-    return jsonify({'rooms': result})
+    return jsonify({
+        'rooms': result,
+        'managed_hotels': len(hotels),
+        'fallback_scope': scope['uses_fallback'],
+    })
 
 @app.route('/api/owner/dashboard')
 @login_required
 def owner_dashboard():
     if not hasattr(current_user, 'role') or current_user.role.name.lower() != 'owner':
         return jsonify({'error': 'Unauthorized'}), 403
-    hotels = db_session.query(Hotel).filter_by(owner_id=current_user.user_id).all()
-    hotel_ids = [h.hotel_id for h in hotels]
-    total_rooms = db_session.query(Room).filter(Room.hotel_id.in_(hotel_ids)).count()
-    total_bookings = db_session.query(Booking).join(Room).filter(Room.hotel_id.in_(hotel_ids)).count()
-    total_revenue = db_session.query(func.sum(Payment.amount)).join(Booking).join(Room).filter(
-        Room.hotel_id.in_(hotel_ids)).scalar() or 0
+
+    scope = get_owner_scope()
+    hotels = scope['hotels']
+    hotel_ids = scope['hotel_ids']
+    rooms = scope['rooms']
+    room_ids = scope['room_ids']
+
+    total_room_types = len(rooms)
+    total_available_rooms = sum(int(room.availableRooms or 0) for room in rooms)
+    total_bookings = db_session.query(Booking).filter(Booking.room_id.in_(room_ids)).count() if room_ids else 0
+    total_revenue = db_session.query(func.sum(Payment.amount)).join(Booking).filter(
+        Booking.room_id.in_(room_ids)).scalar() if room_ids else 0
+    total_revenue = total_revenue or 0
+
     now = datetime.now()
-    monthly_revenue = db_session.query(func.sum(Payment.amount)).join(Booking).join(Room).filter(
-        Room.hotel_id.in_(hotel_ids),
+    today = now.date()
+    today_bookings = db_session.query(Booking).filter(
+        Booking.room_id.in_(room_ids),
+        func.date(Booking.created_at) == today
+    ).count() if room_ids else 0
+    monthly_revenue = db_session.query(func.sum(Payment.amount)).join(Booking).filter(
+        Booking.room_id.in_(room_ids),
         func.extract('month', Payment.created_at) == now.month,
         func.extract('year', Payment.created_at) == now.year
-    ).scalar() or 0
+    ).scalar() if room_ids else 0
+    monthly_revenue = monthly_revenue or 0
+
+    day_labels = []
+    revenue_per_day = []
+    bookings_per_day = []
+    for i in range(29, -1, -1):
+        day = now - timedelta(days=i)
+        day_labels.append(day.strftime('%d/%m'))
+        if room_ids:
+            revenue = db_session.query(func.sum(Payment.amount)).join(Booking).filter(
+                Booking.room_id.in_(room_ids),
+                func.date(Payment.created_at) == day.date()
+            ).scalar() or 0
+            booking_count = db_session.query(Booking).filter(
+                Booking.room_id.in_(room_ids),
+                func.date(Booking.created_at) == day.date()
+            ).count()
+        else:
+            revenue = 0
+            booking_count = 0
+        revenue_per_day.append(float(revenue))
+        bookings_per_day.append(booking_count)
+
+    status_counts = {}
+    if room_ids:
+        status_counts = dict(
+            db_session.query(Booking.status, func.count(Booking.booking_id))
+            .filter(Booking.room_id.in_(room_ids))
+            .group_by(Booking.status)
+            .all()
+        )
+    status_labels = ['success', 'pending', 'failed']
+    status_data = [int(status_counts.get(status, 0)) for status in status_labels]
+
     return jsonify({
         'total_hotels': len(hotels),
-        'total_rooms': total_rooms,
+        'total_rooms': total_available_rooms,
+        'total_available_rooms': total_available_rooms,
+        'total_room_types': total_room_types,
         'total_bookings': total_bookings,
+        'today_bookings': today_bookings,
         'total_revenue': float(total_revenue),
         'monthly_revenue': float(monthly_revenue),
+        'fallback_scope': scope['uses_fallback'],
         'hotels': [
             {'hotel_id': h.hotel_id, 'hotel_name': h.hotel_name}
             for h in hotels
-        ]
+        ],
+        'charts': {
+            'revenue': {
+                'labels': day_labels,
+                'data': revenue_per_day,
+            },
+            'bookings': {
+                'labels': day_labels,
+                'data': bookings_per_day,
+            },
+            'status': {
+                'labels': status_labels,
+                'data': status_data,
+            },
+        },
     })
 
 @app.route('/api/hotel/<int:hotel_id>/dashboard')
 @login_required
 def hotel_dashboard(hotel_id):
-    hotel = db_session.query(Hotel).filter_by(hotel_id=hotel_id, owner_id=current_user.user_id).first()
-    if not hotel:
+    if not owner_can_access_hotel(hotel_id):
         return jsonify({'error': 'Unauthorized'}), 403
-    total_rooms = db_session.query(Room).filter_by(hotel_id=hotel_id).count()
-    room_ids = [r.room_id for r in db_session.query(Room).filter_by(hotel_id=hotel_id).all()]
+    hotel = db_session.query(Hotel).filter_by(hotel_id=hotel_id).first()
+    rooms = db_session.query(Room).filter_by(hotel_id=hotel_id).all()
+    total_room_types = len(rooms)
+    total_rooms = sum(int(room.availableRooms or 0) for room in rooms)
+    room_ids = [r.room_id for r in rooms]
     total_bookings = db_session.query(Booking).filter(Booking.room_id.in_(room_ids)).count() if room_ids else 0
     total_revenue = db_session.query(func.sum(Payment.amount)).join(Booking).filter(
         Booking.room_id.in_(room_ids)).scalar() or 0
@@ -1849,6 +2255,8 @@ def hotel_dashboard(hotel_id):
 
     return jsonify({
         'total_rooms': total_rooms,
+        'total_available_rooms': total_rooms,
+        'total_room_types': total_room_types,
         'total_bookings': total_bookings,
         'total_revenue': float(total_revenue),
         'today_bookings': today_bookings,
@@ -1875,8 +2283,7 @@ def hotel_payments(hotel_id):
     if not current_user.is_owner:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    hotel = db_session.query(Hotel).filter_by(hotel_id=hotel_id, owner_id=current_user.user_id).first()
-    if not hotel:
+    if not owner_can_access_hotel(hotel_id):
         return jsonify({'error': 'Hotel not found'}), 404
 
     # Join Booking và Room để lọc theo hotel_id
@@ -2015,12 +2422,32 @@ import logging as _logging
 _logging.getLogger('sqlalchemy.engine').setLevel(_logging.WARNING)
 _logging.getLogger('sqlalchemy').setLevel(_logging.WARNING)
 
-from ai_agent.graph import chat as ai_chat
+_ai_chat_handler = None
+_ai_chat_import_error = None
+
+
+def get_ai_chat_handler():
+    global _ai_chat_handler, _ai_chat_import_error
+
+    if _ai_chat_handler is not None:
+        return _ai_chat_handler
+
+    if _ai_chat_import_error is not None:
+        return None
+
+    try:
+        from ai_agent.graph import chat as imported_ai_chat
+        _ai_chat_handler = imported_ai_chat
+        return _ai_chat_handler
+    except Exception as exc:
+        _ai_chat_import_error = exc
+        app.logger.warning(f"AI assistant is unavailable: {exc}")
+        return None
 
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
     """API endpoint cho AI Booking Assistant chatbot."""
-    data = request.get_json()
+    data = request.get_json() or {}
     message = data.get('message', '').strip()
     user_lat = data.get('lat')
     user_lng = data.get('lng')
@@ -2051,6 +2478,12 @@ def api_chat():
             history.append(AIMessage(content=item['content']))
 
     try:
+        ai_chat = get_ai_chat_handler()
+        if ai_chat is None:
+            return jsonify({
+                "reply": "Trợ lý AI hiện chưa sẵn sàng. Bạn vẫn có thể dùng các chức năng đặt phòng thông thường."
+            })
+
         reply = ai_chat(message=message, user_id=user_id, history=history)
         # Loại bỏ tọa độ GPS ra khỏi câu trả lời
         import re
@@ -2060,14 +2493,15 @@ def api_chat():
         return jsonify({"reply": reply})
     except Exception as e:
         app.logger.error(f"[AI CHAT] Error: {str(e)}")
-        return jsonify({"reply": "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại."}), 500
+        if "API_KEY_IP_ADDRESS_BLOCKED" in str(e) or "PERMISSION_DENIED" in str(e):
+            return jsonify({
+                "reply": "AI đang bị chặn bởi cấu hình API key hiện tại. Vui lòng cập nhật khóa Gemini hoặc bỏ giới hạn IP."
+            })
+        return jsonify({
+            "reply": "Xin lỗi, trợ lý AI đang tạm thời không khả dụng. Bạn vẫn có thể đặt phòng và thanh toán bình thường."
+        })
 
 if __name__ == '__main__':
-    try:
-        # Tạo database và bảng
-        Base.metadata.create_all(bind=engine)
-        print("Database tables created successfully!")
-    except Exception as e:
-        print(f"Error creating database tables: {str(e)}")
+    initialize_database()
         
     app.run(debug=True, port=5001)  # Port 5001 vì macOS AirPlay chiếm port 5000

@@ -1,10 +1,11 @@
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from sqlalchemy.orm import Session
-from models import User, Hotel, Room, Service, Review, Booking, Payment, UserRole
-from flask_mail import Message
+
 from flask import current_app
-import os
+from flask_mail import Message
+from sqlalchemy.orm import Session
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from models import Booking, Hotel, Payment, Review, Room, Service, User, UserRole
 
 def create_user(db: Session, username: str, password: str, email: str, full_name: str = None, phone: str = None):
     hashed_password = generate_password_hash(password)
@@ -55,13 +56,18 @@ def create_booking(db: Session, user_id: int, room_id: int, check_in: datetime, 
     db.refresh(booking)
     return booking
 
-def create_payment(db: Session, booking_id: int, amount: int, payment_method: str, user_id: int):
+def create_payment(
+    db: Session,
+    booking_id: int,
+    amount: int,
+    payment_method: str,
+    user_id: int | None = None,
+):
     payment = Payment(
         booking_id=booking_id,
         amount=amount,
         payment_method=payment_method,
-        payment_status='pending',
-        user_id=user_id
+        payment_status='pending'
     )
     db.add(payment)
     db.commit()
@@ -103,13 +109,18 @@ def send_email(to, subject, template):
     Hàm tiện ích để gửi email
     """
     try:
+        mail_extension = current_app.extensions.get('mail')
+        if mail_extension is None:
+            current_app.logger.warning("Mail extension is not configured.")
+            return False
+
         msg = Message(
             subject,
             recipients=[to],
             html=template,
-            sender=current_app.config['MAIL_USERNAME']
+            sender=current_app.config.get('MAIL_DEFAULT_SENDER') or current_app.config.get('MAIL_USERNAME')
         )
-        current_app.extensions['mail'].send(msg)
+        mail_extension.send(msg)
         return True
     except Exception as e:
         current_app.logger.error(f"Error sending email: {str(e)}")
@@ -141,4 +152,4 @@ def send_password_reset_email(email, reset_url):
     <p>Link này sẽ hết hạn sau 1 giờ.</p>
     <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
     """
-    return send_email(email, subject, template) 
+    return send_email(email, subject, template)

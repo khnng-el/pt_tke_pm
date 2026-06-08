@@ -92,6 +92,8 @@ class Hotel(Base):
     owner = relationship("User", back_populates="hotels")
     rooms = relationship("Room", back_populates="hotel")
     reviews = relationship("Review", back_populates="hotel")
+    images = relationship("HotelImage", back_populates="hotel")
+    location = relationship("HotelLocation", back_populates="hotel", uselist=False)
 
 class Room(Base):
     __tablename__ = 'rooms'
@@ -168,10 +170,20 @@ class Payment(Base):
     # Relationships
     booking = relationship("Booking", back_populates="payment")
 
+class HotelImage(Base):
+    __tablename__ = 'hotel_images'
+
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey('hotels.hotel_id'), nullable=False)
+    image_path = Column(String(255), nullable=False)
+    is_main = Column(Boolean, default=False)
+
+    hotel = relationship("Hotel", back_populates="images")
+
 class RoomImage(Base):
     __tablename__ = 'room_images'
     
-    image_id = Column(Integer, primary_key=True)
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey('rooms.room_id'), nullable=False)
     image_path = Column(String(255), nullable=False)
     
@@ -191,4 +203,6 @@ class HotelLocation(Base):
     __tablename__ = 'hotel_locations'
     hotel_id = Column(Integer, ForeignKey('hotels.hotel_id'), primary_key=True)
     latitude = Column(Float)
-    longitude = Column(Float) 
+    longitude = Column(Float)
+
+    hotel = relationship("Hotel", back_populates="location")

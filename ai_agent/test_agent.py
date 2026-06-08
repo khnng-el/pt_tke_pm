@@ -36,13 +36,13 @@ def main():
             break
 
         if question.strip().lower() in ['quit', 'exit']:
-            print("Tạm biệt! 👋")
+            print("Tạm biệt! ")
             break
 
         if not question.strip():
             continue
 
-        print("\n🤖 Đang xử lý...")
+        print("\n Đang xử lý...")
 
         try:
             # Gọi hàm chat
@@ -54,7 +54,7 @@ def main():
 
             print(f"\nBot: {answer}\n")
         except Exception as e:
-            print(f"\n❌ Lỗi: {e}\n")
+            print(f"\n Lỗi: {e}\n")
 
 
 if __name__ == "__main__":

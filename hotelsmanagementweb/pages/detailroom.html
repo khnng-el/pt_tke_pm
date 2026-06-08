@@ -13,7 +13,6 @@
         href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="../css/base.css">
-    <link rel="stylesheet" type="text/css" href="../css/main.css">
     <link rel="stylesheet" type="text/css" href="../css/detailroom.css">
 </head>
 
@@ -27,7 +26,7 @@
         </div>
         <div class="title2">
             <h1 class="name__hotel">{{ hotel.hotel_name }}</h1>
-            <p class="location">{{ hotel.location }}</p>
+            <p class="location">{{ hotel_display_location }}</p>
         </div>
     </div>
 
@@ -51,7 +50,7 @@
         <div class="about__place">
             <div class="intro">
                 <h2 class="about__title">About the place</h2>
-                <p class="p1">{{ hotel.descriptions }}</p>
+                <p class="p1">{{ hotel_description }}</p>
             </div>
             <div class="booknow">
                 <h2 class="booknow__content">Start Booking</h2>
@@ -82,7 +81,7 @@
                 <div class="room-content">
                     <div class="room-gallery">
                         <div class="main-image"
-                            style="background-image: url('{{ room.image_url if room.image_url else '/assets/image/default-room.webp' }}')">
+                            style="background-image: url('{{ room.image_url if room.image_url else '/assets/image/default-hotel.webp' }}')">
                             <button class="view-all-btn" onclick="openRoomDetails({{ room.room_id }})">
                                 <i class="fas fa-expand-arrows-alt"></i> View All
                             </button>
@@ -209,45 +208,16 @@
     <div class="amenities">
         <h2 class="section-title">Amenities & Facilities</h2>
         <div class="amenities-grid">
+            {% for group in amenity_groups %}
             <div class="amenity-category">
-                <h3><i class="fas fa-bed"></i> In-Room Services</h3>
+                <h3><i class="{{ group['icon'] }}"></i> {{ group['title'] }}</h3>
                 <ul class="amenity-list">
-                    <li><i class="fas fa-wifi"></i> Free Wi-Fi</li>
-                    <li><i class="fas fa-snowflake"></i> Air conditioning</li>
-                    <li><i class="fas fa-tv"></i> Flat-screen TV</li>
-                    <li><i class="fas fa-broadcast-tower"></i> Cable channels</li>
-                    <li><i class="fas fa-glass-martini-alt"></i> Minibar</li>
-                    <li><i class="fas fa-coffee"></i> Coffee/tea maker</li>
-                    <li><i class="fas fa-tint"></i> Complimentary bottled water</li>
-                    <li><i class="fas fa-vault"></i> In-room safe</li>
+                    {% for item in group['items'] %}
+                    <li><i class="{{ item['icon'] }}"></i> {{ item['name'] }}</li>
+                    {% endfor %}
                 </ul>
             </div>
-            <div class="amenity-category">
-                <h3><i class="fas fa-spa"></i> Relaxation & Recreation</h3>
-                <ul class="amenity-list">
-                    <li><i class="fas fa-swimming-pool"></i> Swimming pool</li>
-                    <li><i class="fas fa-spa"></i> Spa & wellness center</li>
-                    <li><i class="fas fa-dumbbell"></i> Fitness center / Gym</li>
-                    <li><i class="fas fa-hot-tub"></i> Sauna</li>
-                    <li><i class="fas fa-leaf"></i> Garden or terrace</li>
-                    <li><i class="fas fa-pray"></i> Yoga classes</li>
-                    <li><i class="fas fa-gamepad"></i> Game room</li>
-                    <li><i class="fas fa-table-tennis"></i> Billiards / Table tennis</li>
-                </ul>
-            </div>
-            <div class="amenity-category">
-                <h3><i class="fas fa-utensils"></i> Dining & Entertainment</h3>
-                <ul class="amenity-list">
-                    <li><i class="fas fa-utensils"></i> On-site restaurant</li>
-                    <li><i class="fas fa-glass-cheers"></i> Bar / Lounge</li>
-                    <li><i class="fas fa-bacon"></i> Breakfast buffet</li>
-                    <li><i class="fas fa-concierge-bell"></i> Room service</li>
-                    <li><i class="fas fa-coffee"></i> Café / Coffee shop</li>
-                    <li><i class="fas fa-moon"></i> Themed dinner nights</li>
-                    <li><i class="fas fa-music"></i> Live music or performances</li>
-                    <li><i class="fas fa-store"></i> Mini market or snack bar</li>
-                </ul>
-            </div>
+            {% endfor %}
         </div>
     </div>
 
@@ -291,7 +261,7 @@
                 <div id="contact-us" class="col-md-4">
                     <h5>Contact</h5>
                     <p>
-                        <i class="fas fa-phone"></i> 0388678705<br>
+                        <i class="fas fa-phone"></i> 0365651105<br>
                         <i class="fas fa-envelope"></i> hanoibooking@hotelsmanagement.com<br>
                         <i class="fas fa-map-marker-alt"></i> Hanoi, Vietnam
                     </p>
@@ -299,10 +269,10 @@
                 <div class="col-md-4">
                     <h5>Follow Us</h5>
                     <div class="social-links">
-                        <a href="https://www.facebook.com/ucthanh.367755" target="_blank" class="me-3">
+                        <a href="https://www.facebook.com/khanh.truong.173354" target="_blank" class="me-3">
                             <i class="fab fa-facebook"></i>
                         </a>
-                        <a href="https://www.instagram.com/dthanh.71_/" target="_blank" class="me-3">
+                        <a href="https://www.instagram.com/_khnng" target="_blank" class="me-3">
                             <i class="fab fa-instagram"></i>
                         </a>
                         <a href="https://www.linkedin.com/in/nguy%E1%BB%85n-th%C3%A0nh-9404612a0/" target="_blank">
@@ -1012,7 +982,7 @@
                     // Xử lý lỗi tải ảnh
                     img.onerror = () => {
                         console.error('Failed to load image:', image);
-                        img.src = '/assets/image/default-room.webp';
+                        img.src = '/assets/image/default-hotel.webp';
                     };
 
                     modalGallery.appendChild(img);
@@ -1149,19 +1119,7 @@
             });
         }
     </script>
-    <!--Start of Tawk.to Script-->
-    <script type="text/javascript">
-        var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
-        (function () {
-            var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
-            s1.async = true;
-            s1.src = 'https://embed.tawk.to/6826bd708ec535190f11a681/1irbl80k7';
-            s1.charset = 'UTF-8';
-            s1.setAttribute('crossorigin', '*');
-            s0.parentNode.insertBefore(s1, s0);
-        })();
-    </script>
-    <!--End of Tawk.to Script-->
+    {% include 'ai_chat_widget.html' %}
 </body>
 
 </html>
