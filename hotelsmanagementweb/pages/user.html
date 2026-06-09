@@ -489,45 +489,68 @@
             </a>
             <div class="menu__func">
                 <!-- Menu cho Customer -->
-                <div class="func1 active" onclick="switchSection('bookings')" data-role="customer">
+                <div class="func1 active" onclick="switchSection('bookings')" data-role="customer"
+                    data-section="bookings">
                     <i class="fa-solid fa-file-invoice"></i>
                     <p class="func-title">Bookings</p>
                 </div>
-                <div class="func2" onclick="switchSection('transactions')" data-role="customer">
+                <div class="func2" onclick="switchSection('transactions')" data-role="customer"
+                    data-section="transactions">
                     <i class="fa-solid fa-credit-card"></i>
                     <p class="func-title">Transactions</p>
                 </div>
-                <div class="func3" onclick="switchSection('account')" data-role="customer">
+                <div class="func3" onclick="switchSection('checkin')" data-role="customer" data-section="checkin">
+                    <i class="fa-solid fa-door-open"></i>
+                    <p class="func-title">Check In</p>
+                </div>
+                <div class="func4" onclick="switchSection('checkout')" data-role="customer" data-section="checkout">
+                    <i class="fa-solid fa-receipt"></i>
+                    <p class="func-title">Check Out</p>
+                </div>
+                <div class="func5" onclick="switchSection('account')" data-role="customer" data-section="account">
                     <i class="fa-solid fa-id-badge"></i>
                     <p class="func-title">Account</p>
                 </div>
-                <div class="func4" data-role="customer" onclick="openHelpPopup()">
+                <div class="func6" data-role="customer" onclick="openHelpPopup()" data-section="help">
                     <i class="fa-solid fa-circle-info"></i>
                     <p class="func-title">Help</p>
                 </div>
-                <div class="func5" data-role="customer">
+                <div class="func7" data-role="customer" onclick="switchSection('message')" data-section="message">
                     <i class="fa-solid fa-message"></i>
                     <p class="func-title">Messages</p>
                 </div>
 
                 <!-- Menu cho Owner -->
-                <div class="func1" onclick="switchSection('booking-history')" data-role="owner">
+                <div class="func1" onclick="switchSection('booking-history')" data-role="owner"
+                    data-section="booking-history">
                     <i class="fa-solid fa-history"></i>
                     <p class="func-title">Booking History</p>
                 </div>
-                <div class="func2" onclick="switchSection('room-management')" data-role="owner">
+                <div class="func2" onclick="switchSection('room-management')" data-role="owner"
+                    data-section="room-management">
                     <i class="fa-solid fa-bed"></i>
                     <p class="func-title">Room Management</p>
                 </div>
-                <div class="func3" onclick="switchSection('dashboard')" data-role="owner">
+                <div class="func3" onclick="switchSection('checkin-management')" data-role="owner"
+                    data-section="checkin-management">
+                    <i class="fa-solid fa-door-open"></i>
+                    <p class="func-title">Checkin Management</p>
+                </div>
+                <div class="func4" onclick="switchSection('checkout-management')" data-role="owner"
+                    data-section="checkout-management">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                    <p class="func-title">Checkout Management</p>
+                </div>
+                <div class="func5" onclick="switchSection('dashboard')" data-role="owner" data-section="dashboard">
                     <i class="fa-solid fa-chart-line"></i>
                     <p class="func-title">Dashboard</p>
                 </div>
-                <div class="func4" onclick="switchSection('hotel-rooms')" data-role="owner">
+                <div class="func6" onclick="switchSection('hotel-rooms')" data-role="owner"
+                    data-section="hotel-rooms">
                     <i class="fa-solid fa-hotel"></i>
                     <p class="func-title">Payment History</p>
                 </div>
-                <div class="func5" onclick="switchSection('account')" data-role="owner">
+                <div class="func7" onclick="switchSection('account')" data-role="owner" data-section="account">
                     <i class="fa-solid fa-id-badge"></i>
                     <p class="func-title">Account</p>
                 </div>
@@ -664,6 +687,30 @@
                 </div>
             </div>
 
+            <!-- Customer Checkin Section -->
+            <div id="checkin" class="content-section">
+                <h2 class="list-title">Check In</h2>
+                <div class="checkin-list">
+                    <!-- Check-in records will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Customer Checkout Section -->
+            <div id="checkout" class="content-section">
+                <h2 class="list-title">Check Out</h2>
+                <div class="checkout-list">
+                    <!-- Checkout invoices will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Messages Section -->
+            <div id="message" class="content-section">
+                <h2 class="list-title">Messages</h2>
+                <div class="message-list">
+                    <!-- Messages will be loaded dynamically -->
+                </div>
+            </div>
+
             <!-- Account Section -->
             <div id="account" class="content-section">
                 <h2 class="list-title">Account Settings</h2>
@@ -722,6 +769,22 @@
                     <div class="booking-list room-list">
                         <!-- Room list will be loaded dynamically -->
                     </div>
+                </div>
+            </div>
+
+            <!-- Checkin Management Section -->
+            <div id="checkin-management" class="content-section">
+                <h2 class="list-title">Checkin Management</h2>
+                <div class="checkin-management-list">
+                    <!-- Check-in management content will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Checkout Management Section -->
+            <div id="checkout-management" class="content-section">
+                <h2 class="list-title">Checkout Management</h2>
+                <div class="checkout-management-list">
+                    <!-- Checkout management content will be loaded dynamically -->
                 </div>
             </div>
 
@@ -834,7 +897,9 @@
             });
 
             // Hiển thị section được chọn
-            document.getElementById(sectionId).style.display = 'block';
+            const targetSection = document.getElementById(sectionId);
+            if (!targetSection) return;
+            targetSection.style.display = 'block';
 
             // Xác định role hiện tại dựa trên menu đang hiển thị
             let currentRole = 'customer';
@@ -843,53 +908,22 @@
                 currentRole = 'owner';
             }
 
-            // Thêm active class cho menu item được chọn
-            let activeClass = '';
+            const menuItem = Array.from(document.querySelectorAll('.menu__func > div'))
+                .find(item => item.getAttribute('data-section') === sectionId && item.style.display !== 'none');
+            if (menuItem) menuItem.classList.add('active');
+
             if (currentRole === 'customer') {
-                switch (sectionId) {
-                    case 'bookings':
-                        activeClass = 'func1';
-                        break;
-                    case 'transactions':
-                        activeClass = 'func2';
-                        break;
-                    case 'account':
-                        activeClass = 'func3';
-                        break;
-                    case 'help':
-                        activeClass = 'func4';
-                        break;
-                    case 'message':
-                        activeClass = 'func5';
-                        break;
-                }
+                if (sectionId === 'bookings') loadBookings();
+                if (sectionId === 'transactions') loadTransactions();
+                if (sectionId === 'checkin') loadUserCheckins();
+                if (sectionId === 'checkout') loadUserCheckouts();
+                if (sectionId === 'message') loadMessages();
             } else if (currentRole === 'owner') {
-                switch (sectionId) {
-                    case 'booking-history':
-                        activeClass = 'func1';
-                        loadOwnerBookingHistory();
-                        break;
-                    case 'room-management':
-                        activeClass = 'func2';
-                        loadOwnerRoomTypes();
-                        break;
-                    case 'dashboard':
-                        activeClass = 'func3';
-                        loadOwnerDashboardStats();
-                        break;
-                    case 'hotel-rooms':
-                        activeClass = 'func4';
-                        break;
-                    case 'account':
-                        activeClass = 'func5';
-                        break;
-                }
-            }
-            if (activeClass) {
-                // Chỉ set active cho menu đang hiển thị
-                const menuItem = Array.from(document.querySelectorAll('.menu__func > div'))
-                    .find(item => item.classList.contains(activeClass) && item.style.display !== 'none');
-                if (menuItem) menuItem.classList.add('active');
+                if (sectionId === 'booking-history') loadOwnerBookingHistory();
+                if (sectionId === 'room-management') loadOwnerRoomTypes();
+                if (sectionId === 'checkin-management') loadOwnerCheckinManagement();
+                if (sectionId === 'checkout-management') loadOwnerCheckoutManagement();
+                if (sectionId === 'dashboard') loadOwnerDashboardStats();
             }
         }
 
@@ -1265,11 +1299,371 @@
                 .catch(error => console.error('Error loading transactions:', error));
         }
 
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML;
+        }
+
+        function getCheckoutStatusClass(status) {
+            switch ((status || '').toLowerCase()) {
+                case 'paid': return 'status-success';
+                case 'pending': return 'status-pending';
+                case 'failed': return 'status-failed';
+                case 'no_charge': return 'status-success';
+                default: return 'status-pending';
+            }
+        }
+
+        function getCheckinStatusClass(status) {
+            return (status || '').toLowerCase() === 'confirmed' ? 'status-success' : 'status-pending';
+        }
+
+        function loadUserCheckins() {
+            const checkinList = document.querySelector('.checkin-list');
+            if (!checkinList) return;
+            checkinList.innerHTML = '<div class="loading">Loading check-in information...</div>';
+
+            fetch('/api/user/checkins')
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load check-ins');
+                    return response.json();
+                })
+                .then(data => {
+                    const checkins = data.checkins || [];
+                    if (checkins.length === 0) {
+                        checkinList.innerHTML = '<div class="no-bookings">No paid bookings are ready for check-in yet.</div>';
+                        return;
+                    }
+
+                    checkinList.innerHTML = checkins.map(checkin => {
+                        const statusClass = getCheckinStatusClass(checkin.status);
+                        const statusMessage = checkin.is_confirmed
+                            ? `Front desk confirmed your arrival at ${escapeHtml(checkin.checkin_at)}.`
+                            : 'Waiting for the front desk to confirm your arrival.';
+                        return `
+                            <div class="checkin-card">
+                                <div class="checkout-card-header">
+                                    <div>
+                                        <div class="checkout-booking-id">Booking #${checkin.booking_id}</div>
+                                        <h3>${escapeHtml(checkin.hotel_name)}</h3>
+                                    </div>
+                                    <span class="transaction-status ${statusClass}">${escapeHtml(checkin.status_label)}</span>
+                                </div>
+                                <div class="checkout-meta">
+                                    <span><i class="fa-solid fa-bed"></i>${escapeHtml(checkin.room_type)}</span>
+                                    <span><i class="fa-solid fa-calendar-check"></i>Scheduled: ${escapeHtml(checkin.scheduled_checkin)} - ${escapeHtml(checkin.scheduled_checkout)}</span>
+                                    <span><i class="fa-solid fa-clock"></i>Actual: ${escapeHtml(checkin.checkin_at || 'Not confirmed')}</span>
+                                </div>
+                                <div class="checkout-note">${statusMessage}</div>
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading check-ins:', error);
+                    checkinList.innerHTML = '<div class="no-bookings">Error loading check-in information.</div>';
+                });
+        }
+
+        function loadUserCheckouts() {
+            const checkoutList = document.querySelector('.checkout-list');
+            if (!checkoutList) return;
+            checkoutList.innerHTML = '<div class="loading">Loading checkout information...</div>';
+
+            fetch('/api/user/checkouts')
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load checkout invoices');
+                    return response.json();
+                })
+                .then(data => {
+                    const checkouts = data.checkouts || [];
+                    if (checkouts.length === 0) {
+                        checkoutList.innerHTML = '<div class="no-bookings">No checkout bills or messages yet.</div>';
+                        return;
+                    }
+
+                    checkoutList.innerHTML = checkouts.map(checkout => {
+                        const statusClass = getCheckoutStatusClass(checkout.status);
+                        const payButton = checkout.can_pay
+                            ? `<button class="checkout-pay-btn" onclick="payCheckout(${checkout.checkout_id})"><i class="fa-solid fa-credit-card"></i>Pay with VNPay</button>`
+                            : '';
+                        return `
+                            <div class="checkout-card">
+                                <div class="checkout-card-header">
+                                    <div>
+                                        <div class="checkout-booking-id">Booking #${checkout.booking_id}</div>
+                                        <h3>${escapeHtml(checkout.hotel_name)}</h3>
+                                    </div>
+                                    <span class="transaction-status ${statusClass}">${escapeHtml(checkout.status_label)}</span>
+                                </div>
+                                <div class="checkout-meta">
+                                    <span><i class="fa-solid fa-bed"></i>${escapeHtml(checkout.room_type)}</span>
+                                    <span><i class="fa-solid fa-calendar-check"></i>${escapeHtml(checkout.check_out)}</span>
+                                    <span><i class="fa-solid fa-door-open"></i>Check-in: ${escapeHtml(checkout.actual_checkin_at || 'Not confirmed')}</span>
+                                    <span><i class="fa-solid fa-clock"></i>Checkout: ${escapeHtml(checkout.actual_checkout_at || 'Not recorded')}</span>
+                                    <span><i class="fa-solid fa-door-open"></i>${checkout.num_rooms || 1} room(s)</span>
+                                </div>
+                                <div class="checkout-stay-duration">Stay duration: ${escapeHtml(checkout.stay_duration)}</div>
+                                <div class="checkout-amount">${escapeHtml(checkout.amount_formatted)}</div>
+                                <div class="checkout-note">${escapeHtml(checkout.note)}</div>
+                                <div class="checkout-actions">${payButton}</div>
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading checkout invoices:', error);
+                    checkoutList.innerHTML = '<div class="no-bookings">Error loading checkout information.</div>';
+                });
+        }
+
+        function payCheckout(checkoutId) {
+            window.location.href = `/checkout/pay/${checkoutId}`;
+        }
+
+        function loadMessages() {
+            const messageList = document.querySelector('.message-list');
+            if (!messageList) return;
+            messageList.innerHTML = '<div class="loading">Loading messages...</div>';
+
+            fetch('/api/user/notifications')
+                .then(response => response.json())
+                .then(data => {
+                    const notifications = data.notifications || [];
+                    if (notifications.length === 0) {
+                        messageList.innerHTML = '<div class="no-bookings">No messages yet.</div>';
+                        return;
+                    }
+                    messageList.innerHTML = notifications.map(noti => `
+                        <div class="message-card ${noti.read ? '' : 'unread'}">
+                            <div class="message-icon"><i class="${getNotiIcon(noti.type)}"></i></div>
+                            <div class="message-content">
+                                <p>${escapeHtml(noti.message)}</p>
+                                <span>${formatTimeAgo(noti.created_at)}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading messages:', error);
+                    messageList.innerHTML = '<div class="no-bookings">Error loading messages.</div>';
+                });
+        }
+
+        function loadOwnerCheckoutManagement() {
+            const checkoutManagementList = document.querySelector('.checkout-management-list');
+            if (!checkoutManagementList) return;
+            checkoutManagementList.innerHTML = '<div class="loading">Loading checkout management...</div>';
+
+            fetch('/api/owner/checkout-management')
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load checkout management');
+                    return response.json();
+                })
+                .then(data => {
+                    const bookings = data.bookings || [];
+                    if (bookings.length === 0) {
+                        checkoutManagementList.innerHTML = '<div class="no-bookings">No bookings are ready for checkout yet.</div>';
+                        return;
+                    }
+
+                    checkoutManagementList.innerHTML = bookings.map(booking => {
+                        const disabled = booking.can_edit ? '' : 'disabled';
+                        const statusClass = getCheckoutStatusClass(booking.checkout_status);
+                        return `
+                            <div class="checkout-management-card" data-booking-id="${booking.booking_id}">
+                                <div class="checkout-management-info">
+                                    <div class="checkout-card-header">
+                                        <div>
+                                            <div class="checkout-booking-id">Booking #${booking.booking_id}</div>
+                                            <h3>${escapeHtml(booking.hotel_name)}</h3>
+                                        </div>
+                                        <span class="transaction-status ${statusClass}">${escapeHtml(booking.checkout_status_label)}</span>
+                                    </div>
+                                    <div class="checkout-meta">
+                                        <span><i class="fa-solid fa-user"></i>${escapeHtml(booking.customer_name)}</span>
+                                        <span><i class="fa-solid fa-phone"></i>${escapeHtml(booking.customer_phone)}</span>
+                                        <span><i class="fa-solid fa-envelope"></i>${escapeHtml(booking.customer_email)}</span>
+                                        <span><i class="fa-solid fa-bed"></i>${escapeHtml(booking.room_type)}</span>
+                                        <span><i class="fa-solid fa-calendar-check"></i>${escapeHtml(booking.check_out)}</span>
+                                        <span><i class="fa-solid fa-door-open"></i>Check-in: ${escapeHtml(booking.actual_checkin_at || 'Not confirmed')}</span>
+                                        <span><i class="fa-solid fa-clock"></i>Checkout: ${escapeHtml(booking.actual_checkout_at || 'Not recorded')}</span>
+                                    </div>
+                                    <div class="checkout-amount">Booking total: ${formatPrice(booking.booking_total || 0)}</div>
+                                    <div class="checkout-stay-duration">Stay duration: ${escapeHtml(booking.stay_duration || 'Actual stay time is not complete yet')}</div>
+                                </div>
+                                <div class="checkout-management-form">
+                                    <div class="form-group">
+                                        <label>Actual checkout time</label>
+                                        <input id="checkout-time-${booking.booking_id}" type="datetime-local"
+                                            value="${escapeHtml(booking.actual_checkout_input_value || '')}" ${disabled}>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Extra charge</label>
+                                        <input id="checkout-amount-${booking.booking_id}" type="number" min="0" step="1000"
+                                            value="${booking.extra_amount || ''}" ${disabled}>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Checkout note</label>
+                                        <textarea id="checkout-note-${booking.booking_id}" rows="4" ${disabled}>${escapeHtml(booking.note || '')}</textarea>
+                                    </div>
+                                    <button type="button" class="checkout-send-btn" onclick="submitCheckoutInvoice(${booking.booking_id})" ${disabled}>
+                                        <i class="fa-solid fa-paper-plane"></i>Send to customer
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading checkout management:', error);
+                    checkoutManagementList.innerHTML = '<div class="no-bookings">Error loading checkout management.</div>';
+                });
+        }
+
+        function loadOwnerCheckinManagement() {
+            const checkinManagementList = document.querySelector('.checkin-management-list');
+            if (!checkinManagementList) return;
+            checkinManagementList.innerHTML = '<div class="loading">Loading check-in management...</div>';
+
+            fetch('/api/owner/checkin-management')
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load check-in management');
+                    return response.json();
+                })
+                .then(data => {
+                    const bookings = data.bookings || [];
+                    if (bookings.length === 0) {
+                        checkinManagementList.innerHTML = '<div class="no-bookings">No paid bookings are waiting for check-in.</div>';
+                        return;
+                    }
+
+                    checkinManagementList.innerHTML = bookings.map(booking => {
+                        const statusClass = getCheckinStatusClass(booking.status);
+                        return `
+                            <div class="checkin-management-card" data-booking-id="${booking.booking_id}">
+                                <div class="checkout-management-info">
+                                    <div class="checkout-card-header">
+                                        <div>
+                                            <div class="checkout-booking-id">Booking #${booking.booking_id}</div>
+                                            <h3>${escapeHtml(booking.hotel_name)}</h3>
+                                        </div>
+                                        <span class="transaction-status ${statusClass}">${escapeHtml(booking.status_label)}</span>
+                                    </div>
+                                    <div class="checkout-meta">
+                                        <span><i class="fa-solid fa-user"></i>${escapeHtml(booking.customer_name)}</span>
+                                        <span><i class="fa-solid fa-phone"></i>${escapeHtml(booking.customer_phone)}</span>
+                                        <span><i class="fa-solid fa-envelope"></i>${escapeHtml(booking.customer_email)}</span>
+                                        <span><i class="fa-solid fa-bed"></i>${escapeHtml(booking.room_type)}</span>
+                                        <span><i class="fa-solid fa-calendar-check"></i>${escapeHtml(booking.scheduled_checkin)} - ${escapeHtml(booking.scheduled_checkout)}</span>
+                                    </div>
+                                    <div class="checkout-amount">Actual check-in: ${escapeHtml(booking.checkin_at || 'Not confirmed')}</div>
+                                </div>
+                                <div class="checkout-management-form">
+                                    <div class="form-group">
+                                        <label>Actual check-in time</label>
+                                        <input id="checkin-time-${booking.booking_id}" type="datetime-local"
+                                            value="${escapeHtml(booking.checkin_input_value || '')}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Front desk note</label>
+                                        <textarea id="checkin-note-${booking.booking_id}" rows="3">${escapeHtml(booking.note || '')}</textarea>
+                                    </div>
+                                    <button type="button" class="checkout-send-btn" onclick="submitCheckin(${booking.booking_id})">
+                                        <i class="fa-solid fa-check"></i>Confirm check-in
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading check-in management:', error);
+                    checkinManagementList.innerHTML = '<div class="no-bookings">Error loading check-in management.</div>';
+                });
+        }
+
+        function submitCheckin(bookingId) {
+            const timeInput = document.getElementById(`checkin-time-${bookingId}`);
+            const noteInput = document.getElementById(`checkin-note-${bookingId}`);
+            if (!timeInput || !noteInput) return;
+
+            const checkinAt = timeInput.value;
+            if (!checkinAt) {
+                showNotification('Please choose the actual check-in time.', 'warning');
+                return;
+            }
+
+            fetch('/api/owner/checkin-records', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    booking_id: bookingId,
+                    checkin_at: checkinAt,
+                    note: noteInput.value.trim()
+                })
+            })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.success) {
+                        throw new Error(data.message || 'Could not confirm check-in');
+                    }
+                    showNotification('Check-in confirmed and sent to customer.', 'success');
+                    loadOwnerCheckinManagement();
+                    loadUserNotifications();
+                })
+                .catch(error => {
+                    console.error('Error confirming check-in:', error);
+                    showNotification(error.message || 'Could not confirm check-in.', 'error');
+                });
+        }
+
+        function submitCheckoutInvoice(bookingId) {
+            const amountInput = document.getElementById(`checkout-amount-${bookingId}`);
+            const noteInput = document.getElementById(`checkout-note-${bookingId}`);
+            const checkoutTimeInput = document.getElementById(`checkout-time-${bookingId}`);
+            if (!amountInput || !noteInput) return;
+
+            const amount = Number(amountInput.value || 0);
+            const note = noteInput.value.trim();
+            const actualCheckoutAt = checkoutTimeInput ? checkoutTimeInput.value : '';
+            if (Number.isNaN(amount) || amount < 0) {
+                showNotification('Extra charge must be a valid number.', 'warning');
+                return;
+            }
+            if (amount > 0 && !note) {
+                showNotification('Please enter the reason for the extra charge.', 'warning');
+                return;
+            }
+
+            fetch('/api/owner/checkout-invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ booking_id: bookingId, amount, note, actual_checkout_at: actualCheckoutAt })
+            })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.success) {
+                        throw new Error(data.message || 'Could not send checkout invoice');
+                    }
+                    showNotification('Checkout invoice sent to customer.', 'success');
+                    loadOwnerCheckoutManagement();
+                    loadUserNotifications();
+                })
+                .catch(error => {
+                    console.error('Error sending checkout invoice:', error);
+                    showNotification(error.message || 'Could not send checkout invoice.', 'error');
+                });
+        }
+
         // Hàm lấy icon cho thông báo
         function getNotiIcon(type) {
             switch (type) {
                 case 'booking': return 'fa-solid fa-calendar-check';
                 case 'payment': return 'fa-solid fa-credit-card';
+                case 'checkin': return 'fa-solid fa-door-open';
+                case 'checkout': return 'fa-solid fa-receipt';
                 case 'system': return 'fa-solid fa-circle-info';
                 default: return 'fa-solid fa-bell';
             }
@@ -1510,6 +1904,8 @@
                     } else {
                         loadBookings();
                         loadTransactions();
+                        loadUserCheckins();
+                        loadUserCheckouts();
                     }
 
                     // Tự động chuyển section phù hợp với role
@@ -1531,6 +1927,8 @@
                     updateMenuByRole('customer');
                     loadBookings();
                     loadTransactions();
+                    loadUserCheckins();
+                    loadUserCheckouts();
                     setTimeout(function () {
                         switchSection('bookings');
                     }, 0);

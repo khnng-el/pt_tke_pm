@@ -12,6 +12,8 @@ USE `hotel_management`;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `notifications`;
+DROP TABLE IF EXISTS `checkout_invoices`;
+DROP TABLE IF EXISTS `checkin_records`;
 DROP TABLE IF EXISTS `payment`;
 DROP TABLE IF EXISTS `reviews`;
 DROP TABLE IF EXISTS `room_images`;
@@ -171,6 +173,66 @@ CREATE TABLE `payment` (
   KEY `idx_payment_booking_id` (`booking_id`),
   CONSTRAINT `fk_payment_booking`
     FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `checkin_records` (
+  `checkin_id` int NOT NULL AUTO_INCREMENT,
+  `booking_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `owner_id` int NOT NULL,
+  `hotel_id` int NOT NULL,
+  `checkin_at` datetime NOT NULL,
+  `note` text,
+  `status` varchar(30) NOT NULL DEFAULT 'confirmed',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `confirmed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`checkin_id`),
+  UNIQUE KEY `uq_checkin_records_booking_id` (`booking_id`),
+  KEY `idx_checkin_records_user_id` (`user_id`),
+  KEY `idx_checkin_records_owner_id` (`owner_id`),
+  KEY `idx_checkin_records_hotel_id` (`hotel_id`),
+  CONSTRAINT `fk_checkin_records_booking`
+    FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkin_records_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkin_records_owner`
+    FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkin_records_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `checkout_invoices` (
+  `checkout_id` int NOT NULL AUTO_INCREMENT,
+  `booking_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `owner_id` int NOT NULL,
+  `hotel_id` int NOT NULL,
+  `amount` bigint NOT NULL DEFAULT 0,
+  `note` text,
+  `status` varchar(30) NOT NULL DEFAULT 'no_charge',
+  `txn_ref` varchar(100) DEFAULT NULL,
+  `bank_code` varchar(50) DEFAULT NULL,
+  `pay_date` datetime DEFAULT NULL,
+  `response_code` varchar(10) DEFAULT NULL,
+  `secure_hash` text,
+  `actual_checkout_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `sent_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`checkout_id`),
+  UNIQUE KEY `uq_checkout_invoices_booking_id` (`booking_id`),
+  KEY `idx_checkout_invoices_user_id` (`user_id`),
+  KEY `idx_checkout_invoices_owner_id` (`owner_id`),
+  KEY `idx_checkout_invoices_hotel_id` (`hotel_id`),
+  CONSTRAINT `fk_checkout_invoices_booking`
+    FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkout_invoices_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkout_invoices_owner`
+    FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_checkout_invoices_hotel`
+    FOREIGN KEY (`hotel_id`) REFERENCES `hotels` (`hotel_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `notifications` (

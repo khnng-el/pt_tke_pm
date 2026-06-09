@@ -264,6 +264,18 @@ GET /vnpay_return
 3. Đảm bảo `APP_BASE_URL` đúng với địa chỉ app đang chạy.
 4. Tạo booking và bấm thanh toán trên giao diện.
 
+Thông tin thẻ/ngân hàng test trên VNPay sandbox:
+
+| Trường | Giá trị |
+| --- | --- |
+| Ngân hàng | `NCB` |
+| Số thẻ / số tài khoản | `9704198526191432198` |
+| Tên chủ thẻ | `NGUYEN VAN A` |
+| Ngày phát hành | `07/15` |
+| OTP | `123456` |
+
+Khi được chuyển sang trang VNPay, chọn ngân hàng `NCB`, nhập thông tin ở bảng trên và xác nhận bằng OTP `123456`.
+
 Nếu chưa cấu hình VNPay, app sẽ báo lỗi cấu hình thanh toán khi tạo link thanh toán.
 
 ## Cấu Trúc Thư Mục

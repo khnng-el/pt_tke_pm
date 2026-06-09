@@ -4,7 +4,7 @@ from config import engine, Base, get_db
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from functools import wraps
 from datetime import datetime, timedelta
-from models import User, Hotel, Room, Service, Review, Booking, Payment, UserRole, RoomImage, UserSecurity, Notification, HotelLocation
+from models import User, Hotel, Room, Service, Review, Booking, Payment, UserRole, RoomImage, UserSecurity, Notification, HotelLocation, CheckinRecord, CheckoutInvoice
 from utils import (
     create_user, verify_user, get_available_rooms, create_booking, 
     create_payment, create_review, get_hotel_by_id, get_room_by_id, 
@@ -436,6 +436,239 @@ def owner_can_access_hotel(hotel_id):
         return True
     return db_session.query(Hotel).filter_by(owner_id=current_user.user_id).count() == 0
 
+
+CHECKOUT_NO_CHARGE_STATUS = 'no_charge'
+CHECKOUT_PENDING_STATUS = 'pending'
+CHECKOUT_PAID_STATUS = 'paid'
+CHECKOUT_FAILED_STATUS = 'failed'
+CHECKIN_CONFIRMED_STATUS = 'confirmed'
+
+
+def build_checkout_thank_you_message(hotel_name):
+    return (
+        f"Thank you for trusting {hotel_name}. We hope your stay was comfortable. "
+        "If anything was not as expected, we sincerely apologize and hope to welcome you again."
+    )
+
+
+def format_vnd_amount(amount):
+    try:
+        return f"{int(amount or 0):,} VND"
+    except (TypeError, ValueError):
+        return "0 VND"
+
+
+def format_display_datetime(value):
+    return value.strftime('%Y-%m-%d %H:%M') if value else ''
+
+
+def format_input_datetime(value):
+    return value.strftime('%Y-%m-%dT%H:%M') if value else ''
+
+
+def parse_input_datetime(value):
+    if not value:
+        return None
+    value = str(value).strip()
+    for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d %H:%M:%S'):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def get_booking_room_and_hotel(booking):
+    if not booking:
+        return None, None
+    room = db_session.query(Room).filter_by(room_id=booking.room_id).first()
+    hotel = db_session.query(Hotel).filter_by(hotel_id=room.hotel_id).first() if room else None
+    return room, hotel
+
+
+def owner_can_access_booking(booking):
+    if not booking or not current_user.is_authenticated or not current_user.is_owner:
+        return False
+    room, hotel = get_booking_room_and_hotel(booking)
+    return bool(hotel and owner_can_access_hotel(hotel.hotel_id))
+
+
+def get_checkin_status_label(record):
+    if not record:
+        return 'Waiting for front desk'
+    labels = {
+        CHECKIN_CONFIRMED_STATUS: 'Checked in',
+    }
+    return labels.get(record.status or '', (record.status or 'Checked in').replace('_', ' ').title())
+
+
+def serialize_checkin_record(booking, record=None, room=None, hotel=None, user=None):
+    if booking and (not room or not hotel):
+        room, hotel = get_booking_room_and_hotel(booking)
+    user = user or (db_session.query(User).filter_by(user_id=booking.user_id).first() if booking else None)
+    return {
+        'checkin_id': record.checkin_id if record else None,
+        'booking_id': booking.booking_id if booking else None,
+        'hotel_id': hotel.hotel_id if hotel else None,
+        'hotel_name': hotel.hotel_name if hotel else '',
+        'room_type': room.room_type if room else '',
+        'customer_name': (user.full_name or user.username) if user else '',
+        'customer_phone': user.phone if user else '',
+        'customer_email': user.email if user else '',
+        'scheduled_checkin': booking.check_in.strftime('%Y-%m-%d') if booking and booking.check_in else '',
+        'scheduled_checkout': booking.check_out.strftime('%Y-%m-%d') if booking and booking.check_out else '',
+        'checkin_at': format_display_datetime(record.checkin_at) if record else '',
+        'checkin_input_value': format_input_datetime(record.checkin_at) if record else format_input_datetime(datetime.now()),
+        'note': record.note if record else '',
+        'status': record.status if record else 'waiting',
+        'status_label': get_checkin_status_label(record),
+        'is_confirmed': bool(record),
+        'created_at': format_display_datetime(record.created_at) if record else '',
+        'confirmed_at': format_display_datetime(record.confirmed_at) if record else '',
+    }
+
+
+def get_booking_checkin_record(booking_id):
+    return db_session.query(CheckinRecord).filter_by(booking_id=booking_id).first()
+
+
+def build_stay_duration_label(start_at, end_at):
+    if not start_at or not end_at:
+        return 'Actual stay time is not complete yet'
+    if end_at < start_at:
+        return 'Checkout time is before check-in time'
+
+    total_minutes = int((end_at - start_at).total_seconds() // 60)
+    days, remainder = divmod(total_minutes, 24 * 60)
+    hours, minutes = divmod(remainder, 60)
+    parts = []
+    if days:
+        parts.append(f"{days} day(s)")
+    if hours:
+        parts.append(f"{hours} hour(s)")
+    if minutes or not parts:
+        parts.append(f"{minutes} minute(s)")
+    return ' '.join(parts)
+
+
+def get_checkout_status_label(status):
+    labels = {
+        CHECKOUT_NO_CHARGE_STATUS: 'No extra charge',
+        CHECKOUT_PENDING_STATUS: 'Pending payment',
+        CHECKOUT_PAID_STATUS: 'Paid',
+        CHECKOUT_FAILED_STATUS: 'Payment failed',
+    }
+    return labels.get(status or '', (status or 'Pending').replace('_', ' ').title())
+
+
+def serialize_checkout_invoice(invoice, booking=None, room=None, hotel=None, user=None):
+    booking = booking or invoice.booking
+    if booking and (not room or not hotel):
+        room, hotel = get_booking_room_and_hotel(booking)
+    user = user or (db_session.query(User).filter_by(user_id=invoice.user_id).first() if invoice.user_id else None)
+    checkin_record = get_booking_checkin_record(invoice.booking_id)
+    amount = int(invoice.amount or 0)
+    return {
+        'checkout_id': invoice.checkout_id,
+        'booking_id': invoice.booking_id,
+        'hotel_id': hotel.hotel_id if hotel else invoice.hotel_id,
+        'hotel_name': hotel.hotel_name if hotel else '',
+        'room_type': room.room_type if room else '',
+        'customer_name': (user.full_name or user.username) if user else '',
+        'customer_phone': user.phone if user else '',
+        'customer_email': user.email if user else '',
+        'check_in': booking.check_in.strftime('%Y-%m-%d') if booking and booking.check_in else '',
+        'check_out': booking.check_out.strftime('%Y-%m-%d') if booking and booking.check_out else '',
+        'actual_checkin_at': format_display_datetime(checkin_record.checkin_at) if checkin_record else '',
+        'actual_checkout_at': format_display_datetime(invoice.actual_checkout_at),
+        'actual_checkout_input_value': format_input_datetime(invoice.actual_checkout_at or datetime.now()),
+        'stay_duration': build_stay_duration_label(checkin_record.checkin_at if checkin_record else None, invoice.actual_checkout_at),
+        'num_rooms': int(booking.num_rooms or 1) if booking else 1,
+        'booking_total': float(booking.total_price or 0) if booking else 0,
+        'amount': amount,
+        'amount_formatted': format_vnd_amount(amount),
+        'note': invoice.note or '',
+        'status': invoice.status,
+        'status_label': get_checkout_status_label(invoice.status),
+        'can_pay': amount > 0 and invoice.status in [CHECKOUT_PENDING_STATUS, CHECKOUT_FAILED_STATUS],
+        'pay_url': url_for('checkout_pay', checkout_id=invoice.checkout_id) if invoice.checkout_id else '',
+        'created_at': invoice.created_at.strftime('%Y-%m-%d %H:%M') if invoice.created_at else '',
+        'updated_at': invoice.updated_at.strftime('%Y-%m-%d %H:%M') if invoice.updated_at else '',
+        'paid_at': invoice.pay_date.strftime('%Y-%m-%d %H:%M') if invoice.pay_date else '',
+    }
+
+
+def create_checkout_notification(user_id, message):
+    db_session.add(Notification(
+        user_id=user_id,
+        type='checkout',
+        message=message[:255],
+        read=False,
+        created_at=datetime.utcnow() + timedelta(hours=7)
+    ))
+
+
+def create_checkin_notification(user_id, message):
+    db_session.add(Notification(
+        user_id=user_id,
+        type='checkin',
+        message=message[:255],
+        read=False,
+        created_at=datetime.utcnow() + timedelta(hours=7)
+    ))
+
+
+def auto_create_no_charge_checkout_records(owner_user_id=None, user_id=None):
+    now = datetime.now()
+    query = (
+        db_session.query(Booking)
+        .join(Room, Booking.room_id == Room.room_id)
+        .join(Hotel, Room.hotel_id == Hotel.hotel_id)
+        .filter(
+            Booking.status == 'success',
+            Booking.check_out <= now,
+        )
+    )
+
+    if owner_user_id is not None:
+        owner_hotel_count = db_session.query(Hotel).filter_by(owner_id=owner_user_id).count()
+        if owner_hotel_count > 0:
+            query = query.filter(Hotel.owner_id == owner_user_id)
+    if user_id is not None:
+        query = query.filter(Booking.user_id == user_id)
+
+    created_count = 0
+    for booking in query.all():
+        existing = db_session.query(CheckoutInvoice).filter_by(booking_id=booking.booking_id).first()
+        if existing:
+            continue
+        room, hotel = get_booking_room_and_hotel(booking)
+        if not hotel:
+            continue
+        message = build_checkout_thank_you_message(hotel.hotel_name)
+        invoice = CheckoutInvoice(
+            booking_id=booking.booking_id,
+            user_id=booking.user_id,
+            owner_id=hotel.owner_id,
+            hotel_id=hotel.hotel_id,
+            amount=0,
+            note=message,
+            status=CHECKOUT_NO_CHARGE_STATUS,
+            created_at=now,
+            updated_at=now,
+            sent_at=now,
+        )
+        db_session.add(invoice)
+        create_checkout_notification(
+            booking.user_id,
+            f"Checkout message for booking #{booking.booking_id}: thank you for choosing {hotel.hotel_name}."
+        )
+        created_count += 1
+
+    if created_count:
+        db_session.commit()
+    return created_count
+
 # Đảm bảo file log tồn tại
 if not os.path.exists('app.log'):
     open('app.log', 'a').close()
@@ -463,7 +696,23 @@ def initialize_database():
         app.logger.warning(f"Database initialization skipped: {exc}")
 
 
+def ensure_operational_tables():
+    try:
+        CheckinRecord.__table__.create(bind=engine, checkfirst=True)
+        CheckoutInvoice.__table__.create(bind=engine, checkfirst=True)
+
+        inspector = inspect(engine)
+        if 'checkout_invoices' in inspector.get_table_names():
+            column_names = {column['name'] for column in inspector.get_columns('checkout_invoices')}
+            if 'actual_checkout_at' not in column_names:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE checkout_invoices ADD COLUMN actual_checkout_at datetime DEFAULT NULL"))
+    except Exception as exc:
+        app.logger.warning(f"Operational table initialization skipped: {exc}")
+
+
 initialize_database()
+ensure_operational_tables()
 
 # Route cho trang chủ
 @app.route('/')
@@ -1924,6 +2173,440 @@ def api_user_transactions():
         app.logger.error(f"Error fetching transactions: {str(e)}")
     
     return jsonify({"transactions": transactions})
+
+
+@app.route('/api/user/checkins')
+@login_required
+def api_user_checkins():
+    try:
+        bookings = (
+            db_session.query(Booking)
+            .filter(
+                Booking.user_id == current_user.user_id,
+                Booking.status == 'success',
+            )
+            .order_by(Booking.check_in.desc(), Booking.created_at.desc())
+            .all()
+        )
+
+        result = []
+        for booking in bookings:
+            room, hotel = get_booking_room_and_hotel(booking)
+            record = get_booking_checkin_record(booking.booking_id)
+            result.append(serialize_checkin_record(booking, record=record, room=room, hotel=hotel, user=current_user))
+
+        return jsonify({'checkins': result})
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error loading user checkins: {str(e)}")
+        return jsonify({'error': 'Could not load check-in records'}), 500
+
+
+@app.route('/api/owner/checkin-management')
+@login_required
+def api_owner_checkin_management():
+    if not current_user.is_owner:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        scope = get_owner_scope()
+        room_ids = scope['room_ids']
+        if not room_ids:
+            return jsonify({'bookings': [], 'managed_hotels': len(scope['hotels'])})
+
+        today_start = datetime.combine(datetime.now().date(), datetime.min.time())
+        bookings = (
+            db_session.query(Booking)
+            .filter(
+                Booking.room_id.in_(room_ids),
+                Booking.status == 'success',
+                Booking.check_out >= today_start,
+            )
+            .order_by(Booking.check_in.asc(), Booking.created_at.desc())
+            .all()
+        )
+
+        result = []
+        for booking in bookings:
+            room, hotel = get_booking_room_and_hotel(booking)
+            if not hotel:
+                continue
+            user = db_session.query(User).filter_by(user_id=booking.user_id).first()
+            record = get_booking_checkin_record(booking.booking_id)
+            item = serialize_checkin_record(booking, record=record, room=room, hotel=hotel, user=user)
+            item['can_confirm'] = True
+            result.append(item)
+
+        return jsonify({
+            'bookings': result,
+            'managed_hotels': len(scope['hotels']),
+            'fallback_scope': scope['uses_fallback'],
+        })
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error loading owner checkin management: {str(e)}")
+        return jsonify({'error': 'Could not load check-in management'}), 500
+
+
+@app.route('/api/owner/checkin-records', methods=['POST'])
+@login_required
+def api_owner_confirm_checkin():
+    if not current_user.is_owner:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    data = request.get_json(silent=True) or {}
+    note = (data.get('note') or '').strip()
+
+    try:
+        booking_id = int(data.get('booking_id'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Invalid booking'}), 400
+
+    checkin_at = parse_input_datetime(data.get('checkin_at'))
+    if not checkin_at:
+        return jsonify({'success': False, 'message': 'Invalid check-in time'}), 400
+    if checkin_at > datetime.now() + timedelta(minutes=5):
+        return jsonify({'success': False, 'message': 'Check-in time cannot be in the future'}), 400
+
+    booking = db_session.query(Booking).filter_by(booking_id=booking_id).first()
+    if not booking:
+        return jsonify({'success': False, 'message': 'Booking not found'}), 404
+    if not owner_can_access_booking(booking):
+        return jsonify({'success': False, 'message': 'Unauthorized booking'}), 403
+    if booking.status != 'success':
+        return jsonify({'success': False, 'message': 'Only successfully paid bookings can be checked in'}), 400
+    if booking.check_in and checkin_at < booking.check_in - timedelta(days=1):
+        return jsonify({'success': False, 'message': 'Check-in time is too early for this booking'}), 400
+    if booking.check_out and checkin_at > booking.check_out + timedelta(days=1):
+        return jsonify({'success': False, 'message': 'Check-in time is after the checkout window'}), 400
+
+    room, hotel = get_booking_room_and_hotel(booking)
+    if not hotel:
+        return jsonify({'success': False, 'message': 'Hotel information not found'}), 404
+
+    now = datetime.now()
+    try:
+        record = get_booking_checkin_record(booking.booking_id)
+        if not record:
+            record = CheckinRecord(
+                booking_id=booking.booking_id,
+                user_id=booking.user_id,
+                owner_id=current_user.user_id,
+                hotel_id=hotel.hotel_id,
+                created_at=now,
+            )
+            db_session.add(record)
+
+        record.checkin_at = checkin_at
+        record.note = note
+        record.status = CHECKIN_CONFIRMED_STATUS
+        record.owner_id = current_user.user_id
+        record.hotel_id = hotel.hotel_id
+        record.updated_at = now
+        record.confirmed_at = now
+
+        create_checkin_notification(
+            booking.user_id,
+            f"Check-in confirmed for booking #{booking.booking_id} at {format_display_datetime(checkin_at)}."
+        )
+        db_session.commit()
+
+        user = db_session.query(User).filter_by(user_id=booking.user_id).first()
+        return jsonify({
+            'success': True,
+            'message': 'Check-in confirmed successfully',
+            'checkin': serialize_checkin_record(booking, record=record, room=room, hotel=hotel, user=user),
+        })
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error confirming check-in: {str(e)}")
+        return jsonify({'success': False, 'message': 'Could not confirm check-in'}), 500
+
+
+@app.route('/api/user/checkouts')
+@login_required
+def api_user_checkouts():
+    try:
+        auto_create_no_charge_checkout_records(user_id=current_user.user_id)
+        invoices = (
+            db_session.query(CheckoutInvoice)
+            .filter_by(user_id=current_user.user_id)
+            .order_by(CheckoutInvoice.created_at.desc())
+            .all()
+        )
+        return jsonify({
+            'checkouts': [serialize_checkout_invoice(invoice) for invoice in invoices]
+        })
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error loading user checkout invoices: {str(e)}")
+        return jsonify({'error': 'Could not load checkout invoices'}), 500
+
+
+@app.route('/api/owner/checkout-management')
+@login_required
+def api_owner_checkout_management():
+    if not current_user.is_owner:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        auto_create_no_charge_checkout_records(owner_user_id=current_user.user_id)
+        scope = get_owner_scope()
+        room_ids = scope['room_ids']
+        if not room_ids:
+            return jsonify({'bookings': [], 'managed_hotels': len(scope['hotels'])})
+
+        due_bookings = (
+            db_session.query(Booking)
+            .filter(
+                Booking.room_id.in_(room_ids),
+                Booking.status == 'success',
+                Booking.check_out <= datetime.now(),
+            )
+            .order_by(Booking.check_out.desc(), Booking.created_at.desc())
+            .all()
+        )
+
+        result = []
+        for booking in due_bookings:
+            room, hotel = get_booking_room_and_hotel(booking)
+            if not hotel:
+                continue
+            invoice = db_session.query(CheckoutInvoice).filter_by(booking_id=booking.booking_id).first()
+            checkin_record = get_booking_checkin_record(booking.booking_id)
+            user = db_session.query(User).filter_by(user_id=booking.user_id).first()
+            invoice_data = serialize_checkout_invoice(invoice, booking=booking, room=room, hotel=hotel, user=user) if invoice else None
+            actual_checkout_at = invoice.actual_checkout_at if invoice and invoice.actual_checkout_at else datetime.now()
+            result.append({
+                'booking_id': booking.booking_id,
+                'hotel_id': hotel.hotel_id,
+                'hotel_name': hotel.hotel_name,
+                'room_type': room.room_type if room else '',
+                'customer_name': (user.full_name or user.username) if user else '',
+                'customer_phone': user.phone if user else '',
+                'customer_email': user.email if user else '',
+                'check_in': booking.check_in.strftime('%Y-%m-%d') if booking.check_in else '',
+                'check_out': booking.check_out.strftime('%Y-%m-%d') if booking.check_out else '',
+                'actual_checkin_at': format_display_datetime(checkin_record.checkin_at) if checkin_record else '',
+                'actual_checkout_at': format_display_datetime(invoice.actual_checkout_at) if invoice else '',
+                'actual_checkout_input_value': format_input_datetime(actual_checkout_at),
+                'stay_duration': build_stay_duration_label(checkin_record.checkin_at if checkin_record else None, invoice.actual_checkout_at if invoice else None),
+                'num_rooms': int(booking.num_rooms or 1),
+                'booking_total': float(booking.total_price or 0),
+                'booking_total_formatted': format_vnd_amount(booking.total_price or 0),
+                'checkout_id': invoice.checkout_id if invoice else None,
+                'checkout_status': invoice.status if invoice else '',
+                'checkout_status_label': get_checkout_status_label(invoice.status) if invoice else 'Not sent',
+                'extra_amount': int(invoice.amount or 0) if invoice else 0,
+                'extra_amount_formatted': format_vnd_amount(invoice.amount if invoice else 0),
+                'note': invoice.note if invoice else '',
+                'can_edit': not invoice or invoice.status != CHECKOUT_PAID_STATUS,
+                'invoice': invoice_data,
+            })
+
+        return jsonify({
+            'bookings': result,
+            'managed_hotels': len(scope['hotels']),
+            'fallback_scope': scope['uses_fallback'],
+        })
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error loading owner checkout management: {str(e)}")
+        return jsonify({'error': 'Could not load checkout management'}), 500
+
+
+@app.route('/api/owner/checkout-invoices', methods=['POST'])
+@login_required
+def api_owner_create_checkout_invoice():
+    if not current_user.is_owner:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    data = request.get_json(silent=True) or {}
+    booking_id = data.get('booking_id')
+    note = (data.get('note') or '').strip()
+    actual_checkout_at = parse_input_datetime(data.get('actual_checkout_at')) or datetime.now()
+
+    try:
+        booking_id = int(booking_id)
+        amount = int(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Invalid checkout data'}), 400
+
+    if amount < 0:
+        return jsonify({'success': False, 'message': 'Extra charge cannot be negative'}), 400
+    if amount > 0 and amount < 5000:
+        return jsonify({'success': False, 'message': 'VNPay requires the amount to be at least 5,000 VND'}), 400
+    if amount >= 1_000_000_000:
+        return jsonify({'success': False, 'message': 'Amount must be under 1,000,000,000 VND'}), 400
+    if amount > 0 and not note:
+        return jsonify({'success': False, 'message': 'Please enter a reason for the extra charge'}), 400
+
+    booking = db_session.query(Booking).filter_by(booking_id=booking_id).first()
+    if not booking:
+        return jsonify({'success': False, 'message': 'Booking not found'}), 404
+    if not owner_can_access_booking(booking):
+        return jsonify({'success': False, 'message': 'Unauthorized booking'}), 403
+    if booking.status != 'success':
+        return jsonify({'success': False, 'message': 'Only successfully paid bookings can be checked out'}), 400
+    if booking.check_out and booking.check_out > datetime.now():
+        return jsonify({'success': False, 'message': 'This booking has not reached its checkout date yet'}), 400
+    checkin_record = get_booking_checkin_record(booking.booking_id)
+    if checkin_record and actual_checkout_at < checkin_record.checkin_at:
+        return jsonify({'success': False, 'message': 'Checkout time cannot be before the actual check-in time'}), 400
+    if actual_checkout_at > datetime.now() + timedelta(minutes=5):
+        return jsonify({'success': False, 'message': 'Checkout time cannot be in the future'}), 400
+
+    room, hotel = get_booking_room_and_hotel(booking)
+    if not hotel:
+        return jsonify({'success': False, 'message': 'Hotel information not found'}), 404
+
+    invoice = db_session.query(CheckoutInvoice).filter_by(booking_id=booking.booking_id).first()
+    if invoice and invoice.status == CHECKOUT_PAID_STATUS:
+        return jsonify({'success': False, 'message': 'Paid checkout invoices cannot be edited'}), 400
+
+    now = datetime.now()
+    status = CHECKOUT_PENDING_STATUS if amount > 0 else CHECKOUT_NO_CHARGE_STATUS
+    if amount == 0 and not note:
+        note = build_checkout_thank_you_message(hotel.hotel_name)
+
+    try:
+        if not invoice:
+            invoice = CheckoutInvoice(
+                booking_id=booking.booking_id,
+                user_id=booking.user_id,
+                owner_id=current_user.user_id,
+                hotel_id=hotel.hotel_id,
+                created_at=now,
+            )
+            db_session.add(invoice)
+
+        invoice.amount = amount
+        invoice.note = note
+        invoice.status = status
+        invoice.owner_id = current_user.user_id
+        invoice.hotel_id = hotel.hotel_id
+        invoice.updated_at = now
+        invoice.sent_at = now
+        invoice.actual_checkout_at = actual_checkout_at
+        invoice.txn_ref = None
+        invoice.bank_code = None
+        invoice.pay_date = None
+        invoice.response_code = None
+        invoice.secure_hash = None
+
+        if amount > 0:
+            create_checkout_notification(
+                booking.user_id,
+                f"Checkout bill for booking #{booking.booking_id}: {format_vnd_amount(amount)} extra charge."
+            )
+        else:
+            create_checkout_notification(
+                booking.user_id,
+                f"Checkout message for booking #{booking.booking_id}: thank you for choosing {hotel.hotel_name}."
+            )
+
+        db_session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Checkout invoice sent successfully',
+            'invoice': serialize_checkout_invoice(invoice, booking=booking, room=room, hotel=hotel),
+        })
+    except Exception as e:
+        db_session.rollback()
+        app.logger.error(f"Error creating checkout invoice: {str(e)}")
+        return jsonify({'success': False, 'message': 'Could not send checkout invoice'}), 500
+
+
+@app.route('/checkout/pay/<int:checkout_id>')
+@customer_required
+def checkout_pay(checkout_id):
+    invoice = db_session.query(CheckoutInvoice).filter_by(checkout_id=checkout_id).first()
+    if not invoice:
+        flash('Checkout invoice not found.', 'error')
+        return redirect(url_for('user_profile'))
+    if invoice.user_id != current_user.user_id:
+        abort(403)
+    if int(invoice.amount or 0) <= 0:
+        flash('This checkout does not have any extra charge to pay.', 'info')
+        return redirect(url_for('user_profile'))
+    if invoice.status == CHECKOUT_PAID_STATUS:
+        flash('This checkout invoice has already been paid.', 'success')
+        return redirect(url_for('user_profile'))
+    if invoice.status not in [CHECKOUT_PENDING_STATUS, CHECKOUT_FAILED_STATUS]:
+        flash('This checkout invoice is not ready for payment.', 'error')
+        return redirect(url_for('user_profile'))
+    if not VNP_TMN_CODE or not VNP_HASH_SECRET:
+        app.logger.error("VNPAY configuration is missing VNP_TMN_CODE or VNP_HASH_SECRET")
+        return "Cấu hình thanh toán VNPAY chưa sẵn sàng", 500
+
+    amount_vnd = int(invoice.amount or 0)
+    if amount_vnd < 5000 or amount_vnd >= 1_000_000_000:
+        return "Số tiền không hợp lệ (từ 5,000 đến dưới 1 tỷ đồng)", 400
+
+    import random
+    order_id = 'CHECKOUT' + datetime.now().strftime('%Y%m%d%H%M%S') + str(random.randint(100, 999))
+    order_desc = f"Thanh toan phi checkout booking #{invoice.booking_id}"
+    user_ip = request.remote_addr or '127.0.0.1'
+    return_url = request.url_root.rstrip('/') + '/checkout/vnpay_return'
+    vnp_params = {
+        'vnp_Version': '2.1.0',
+        'vnp_Command': 'pay',
+        'vnp_TmnCode': VNP_TMN_CODE,
+        'vnp_Amount': str(amount_vnd * 100),
+        'vnp_CurrCode': 'VND',
+        'vnp_TxnRef': order_id,
+        'vnp_OrderInfo': order_desc,
+        'vnp_OrderType': 'other',
+        'vnp_Locale': 'vn',
+        'vnp_ReturnUrl': return_url,
+        'vnp_IpAddr': user_ip,
+        'vnp_CreateDate': datetime.now().strftime('%Y%m%d%H%M%S'),
+    }
+    query_string, vnp_secure_hash = build_vnpay_query_and_hash(vnp_params, VNP_HASH_SECRET)
+
+    invoice.txn_ref = order_id
+    invoice.secure_hash = vnp_secure_hash
+    invoice.status = CHECKOUT_PENDING_STATUS
+    invoice.updated_at = datetime.now()
+    db_session.commit()
+
+    payment_url = f"{VNPAY_URL}?{query_string}&vnp_SecureHash={vnp_secure_hash}"
+    return redirect(payment_url)
+
+
+@app.route('/checkout/vnpay_return')
+def checkout_vnpay_return():
+    vnp_ResponseCode = request.args.get('vnp_ResponseCode')
+    vnp_TxnRef = request.args.get('vnp_TxnRef')
+    invoice = db_session.query(CheckoutInvoice).filter_by(txn_ref=vnp_TxnRef).first()
+    if not invoice:
+        return "Không tìm thấy giao dịch checkout trong hệ thống!", 404
+
+    try:
+        invoice.response_code = vnp_ResponseCode
+        invoice.bank_code = request.args.get('vnp_BankCode')
+        invoice.pay_date = datetime.now()
+        invoice.updated_at = datetime.now()
+        if vnp_ResponseCode == '00':
+            invoice.status = CHECKOUT_PAID_STATUS
+            create_checkout_notification(
+                invoice.user_id,
+                f"Checkout extra charge for booking #{invoice.booking_id} was paid successfully."
+            )
+            message = 'Thanh toán phí phát sinh checkout thành công!'
+        else:
+            invoice.status = CHECKOUT_FAILED_STATUS
+            message = 'Thanh toán phí phát sinh checkout thất bại hoặc bị hủy!'
+        db_session.commit()
+        return f'''
+        <script>
+            alert("{message}");
+            window.location.href = "/user";
+        </script>
+        '''
+    except Exception as e:
+        db_session.rollback()
+        return f"Lỗi xử lý kết quả thanh toán checkout: {str(e)}", 500
 
 @app.route('/book_and_pay/<int:room_id>', methods=['POST'])
 @customer_required

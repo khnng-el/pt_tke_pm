@@ -95,7 +95,9 @@ i {
 .func2,
 .func3,
 .func4,
-.func5 {
+.func5,
+.func6,
+.func7 {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -115,7 +117,9 @@ i {
 .func2:hover,
 .func3:hover,
 .func4:hover,
-.func5:hover {
+.func5:hover,
+.func6:hover,
+.func7:hover {
     color: #4A85F6;
     transform: translateX(5px);
 }
@@ -1460,4 +1464,219 @@ i {
 .card__actions-img .pay-btn:hover {
     background: #e3f2fd;
     color: #43a047;
+}
+
+#checkin,
+#checkout,
+#checkin-management,
+#checkout-management,
+#message {
+    overflow-y: auto;
+}
+
+.checkin-list,
+.checkout-list,
+.checkin-management-list,
+.checkout-management-list,
+.message-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px 0 28px;
+}
+
+.checkin-card,
+.checkout-card,
+.checkin-management-card,
+.checkout-management-card,
+.message-card {
+    background: #fff;
+    border: 1px solid #e7ecf5;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(21, 44, 91, 0.08);
+    padding: 18px;
+}
+
+.checkout-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.checkout-card-header h3 {
+    color: #152C5B;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 4px 0 0;
+}
+
+.checkout-booking-id {
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.checkout-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-bottom: 12px;
+    color: #4b5563;
+    font-size: 13px;
+}
+
+.checkout-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.checkout-meta i {
+    color: #3366ff;
+    padding-right: 0;
+}
+
+.checkout-amount {
+    color: #152C5B;
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.checkout-stay-duration {
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 500;
+    margin: -2px 0 10px;
+}
+
+.checkout-note {
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    border-radius: 10px;
+    color: #374151;
+    line-height: 1.5;
+    padding: 12px;
+    white-space: pre-wrap;
+}
+
+.checkout-actions {
+    margin-top: 14px;
+}
+
+.checkout-pay-btn,
+.checkout-send-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #3366ff;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.checkout-pay-btn:hover,
+.checkout-send-btn:hover {
+    background: #2952cc;
+    transform: translateY(-1px);
+}
+
+.checkout-pay-btn i,
+.checkout-send-btn i {
+    padding-right: 0;
+}
+
+.checkin-management-card,
+.checkout-management-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.checkout-management-form {
+    display: grid;
+    gap: 12px;
+}
+
+.checkout-management-form textarea {
+    resize: vertical;
+    min-height: 96px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.checkout-management-form textarea:focus {
+    border-color: #3366ff;
+    outline: none;
+}
+
+.checkout-management-form button:disabled,
+.checkout-management-form input:disabled,
+.checkout-management-form textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.message-card {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.message-card.unread {
+    background: #f0f7ff;
+}
+
+.message-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #e7efff;
+    color: #3366ff;
+}
+
+.message-icon i {
+    padding-right: 0;
+}
+
+.message-content p {
+    color: #152C5B;
+    font-size: 14px;
+    line-height: 1.45;
+    margin-bottom: 4px;
+}
+
+.message-content span {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.loading {
+    color: #6b7280;
+    padding: 18px;
+}
+
+@media screen and (max-width: 900px) {
+    .checkin-management-card,
+    .checkout-management-card {
+        grid-template-columns: 1fr;
+    }
+
+    .checkout-card-header {
+        flex-direction: column;
+    }
 }

@@ -28,6 +28,8 @@ class User(Base, UserMixin):
     bookings = relationship("Booking", back_populates="user")
     reviews = relationship("Review", back_populates="user")
     hotels = relationship("Hotel", back_populates="owner")
+    checkin_records = relationship("CheckinRecord", back_populates="user", foreign_keys="CheckinRecord.user_id")
+    checkout_invoices = relationship("CheckoutInvoice", back_populates="user", foreign_keys="CheckoutInvoice.user_id")
     
     def get_id(self):
         """Return the user ID as a unicode string."""
@@ -94,6 +96,8 @@ class Hotel(Base):
     reviews = relationship("Review", back_populates="hotel")
     images = relationship("HotelImage", back_populates="hotel")
     location = relationship("HotelLocation", back_populates="hotel", uselist=False)
+    checkin_records = relationship("CheckinRecord", back_populates="hotel")
+    checkout_invoices = relationship("CheckoutInvoice", back_populates="hotel")
 
 class Room(Base):
     __tablename__ = 'rooms'
@@ -151,6 +155,8 @@ class Booking(Base):
     user = relationship("User", back_populates="bookings")
     room = relationship("Room", back_populates="bookings")
     payment = relationship("Payment", back_populates="booking", uselist=False)
+    checkin_record = relationship("CheckinRecord", back_populates="booking", uselist=False)
+    checkout_invoice = relationship("CheckoutInvoice", back_populates="booking", uselist=False)
 
 class Payment(Base):
     __tablename__ = 'payment'
@@ -169,6 +175,52 @@ class Payment(Base):
     
     # Relationships
     booking = relationship("Booking", back_populates="payment")
+
+class CheckinRecord(Base):
+    __tablename__ = 'checkin_records'
+
+    checkin_id = Column(Integer, primary_key=True, autoincrement=True)
+    booking_id = Column(Integer, ForeignKey('bookings.booking_id', ondelete='CASCADE'), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    owner_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    hotel_id = Column(Integer, ForeignKey('hotels.hotel_id', ondelete='CASCADE'), nullable=False)
+    checkin_at = Column(DateTime, nullable=False)
+    note = Column(Text)
+    status = Column(String(30), nullable=False, default='confirmed')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    confirmed_at = Column(DateTime)
+
+    booking = relationship("Booking", back_populates="checkin_record")
+    user = relationship("User", back_populates="checkin_records", foreign_keys=[user_id])
+    owner = relationship("User", foreign_keys=[owner_id])
+    hotel = relationship("Hotel", back_populates="checkin_records")
+
+class CheckoutInvoice(Base):
+    __tablename__ = 'checkout_invoices'
+
+    checkout_id = Column(Integer, primary_key=True, autoincrement=True)
+    booking_id = Column(Integer, ForeignKey('bookings.booking_id', ondelete='CASCADE'), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    owner_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    hotel_id = Column(Integer, ForeignKey('hotels.hotel_id', ondelete='CASCADE'), nullable=False)
+    amount = Column(BigInteger, nullable=False, default=0)
+    note = Column(Text)
+    status = Column(String(30), nullable=False, default='no_charge')
+    txn_ref = Column(String(100))
+    bank_code = Column(String(50))
+    pay_date = Column(DateTime)
+    response_code = Column(String(10))
+    secure_hash = Column(Text)
+    actual_checkout_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    sent_at = Column(DateTime)
+
+    booking = relationship("Booking", back_populates="checkout_invoice")
+    user = relationship("User", back_populates="checkout_invoices", foreign_keys=[user_id])
+    owner = relationship("User", foreign_keys=[owner_id])
+    hotel = relationship("Hotel", back_populates="checkout_invoices")
 
 class HotelImage(Base):
     __tablename__ = 'hotel_images'
