@@ -8,10 +8,10 @@ import os
 import re
 import json
 import unicodedata
+from datetime import datetime
 from google import genai
 from langchain_core.messages import AIMessage
 from ai_agent.state import BookingState
-from ai_agent.prompts import BOOKING_PROMPT
 from ai_agent.tools.db_tools import (
     search_available_rooms,
     create_booking_record,
@@ -41,6 +41,9 @@ BUDGET_MATCH_HINTS = [
     "cheap", "budget", "low price", "affordable",
 ]
 ROOM_REQUEST_HINTS = ["phong", "room", "suite", "villa"]
+DATE_TOKEN_PATTERN = re.compile(
+    r"\b(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b"
+)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -165,6 +168,139 @@ def _format_vnd(value: int | float | None) -> str:
     if value is None:
         return "Liên hệ"
     return f"{float(value):,.0f}₫"
+
+
+def _parse_date_token(value: str | None) -> str | None:
+    value = (value or "").strip()
+    for date_format in (
+        "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d",
+        "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y",
+        "%d/%m/%y", "%d-%m-%y", "%d.%m.%y",
+    ):
+        try:
+            return datetime.strptime(value, date_format).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def _date_tokens_from_text(text: str | None) -> list[str]:
+    dates = []
+    for token in DATE_TOKEN_PATTERN.findall(text or ""):
+        parsed = _parse_date_token(token)
+        if parsed:
+            dates.append(parsed)
+    return dates
+
+
+def _extract_dates_from_text(text: str | None) -> dict:
+    dates = _date_tokens_from_text(text)
+    if len(dates) < 2:
+        return {}
+
+    return {
+        "check_in": dates[-2],
+        "check_out": dates[-1],
+    }
+
+
+def _asks_for_checkin_date(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return any(hint in normalized for hint in {
+        "check in",
+        "checkin",
+        "ngay nhan phong",
+        "ngay den",
+        "den ngay nao",
+        "vao ngay nao",
+    })
+
+
+def _asks_for_checkout_date(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return any(hint in normalized for hint in {
+        "check out",
+        "checkout",
+        "ngay tra phong",
+        "ngay di",
+        "roi ngay nao",
+        "tra phong ngay nao",
+    })
+
+
+def _field_for_single_date(previous_ai: str | None, known_dates: dict) -> str:
+    asks_checkin = _asks_for_checkin_date(previous_ai)
+    asks_checkout = _asks_for_checkout_date(previous_ai)
+
+    if asks_checkout and not asks_checkin:
+        return "check_out"
+    if asks_checkin and not asks_checkout:
+        return "check_in"
+    if known_dates.get("check_in") and not known_dates.get("check_out"):
+        return "check_out"
+    return "check_in"
+
+
+def _extract_local_booking_info(state: BookingState) -> dict:
+    info = {}
+    latest_single_date_field = None
+    previous_ai = ""
+
+    for message in state["messages"]:
+        message_type = getattr(message, "type", None)
+        content = message.content or ""
+
+        if message_type == "ai":
+            previous_ai = content
+            continue
+        if message_type != "human":
+            continue
+
+        dates = _date_tokens_from_text(content)
+        if len(dates) >= 2:
+            info["check_in"] = dates[-2]
+            info["check_out"] = dates[-1]
+            latest_single_date_field = None
+        elif len(dates) == 1:
+            field = _field_for_single_date(previous_ai, info)
+            info[field] = dates[0]
+            latest_single_date_field = field
+
+    if latest_single_date_field:
+        info["_latest_single_date_field"] = latest_single_date_field
+
+    return info
+
+
+def _date_range_error(check_in: str | None, check_out: str | None) -> str | None:
+    if not check_in or not check_out:
+        return None
+
+    try:
+        check_in_dt = datetime.strptime(check_in, "%Y-%m-%d")
+        check_out_dt = datetime.strptime(check_out, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return "Định dạng ngày chưa hợp lệ. Bạn vui lòng gửi ngày theo dạng YYYY-MM-DD hoặc DD/MM/YYYY."
+
+    if check_in_dt >= check_out_dt:
+        return "Ngày check-out phải sau ngày check-in."
+
+    return None
+
+
+def _missing_date_message(check_in: str | None, check_out: str | None) -> str:
+    if not check_in:
+        return (
+            "Bạn vui lòng cho mình biết ngày check-in dự kiến nhé. "
+            "Bạn có thể gửi dạng **YYYY-MM-DD** hoặc **DD/MM/YYYY**."
+        )
+    if not check_out:
+        return (
+            f"Mình đã ghi nhận ngày check-in là **{check_in}**.\n\n"
+            "Bạn vui lòng cho mình biết ngày check-out dự kiến nhé. "
+            "Ngày check-out cần sau ngày check-in."
+        )
+    return ""
 
 
 def _last_human_text(state: BookingState) -> str:
@@ -298,6 +434,8 @@ HÃY ĐỌC KỸ lịch sử hội thoại bên dưới và trích xuất thông
 2. Khi Bot HỎI về ngày check-out và User TRẢ LỜI một ngày → đó là check_out  
 3. Ngày có thể ở dạng DD/MM/YYYY hoặc YYYY-MM-DD → luôn chuyển về YYYY-MM-DD
 4. Nếu thông tin chưa được cung cấp, trả về null
+5. Bỏ qua ngày chỉ xuất hiện trong ví dụ của Bot, ví dụ "(Ví dụ: 2023-12-25)"
+6. Nếu User chỉ trả lời một ngày sau câu hỏi check-in, check_out phải là null
 
 Trả về JSON thuần túy (không markdown, không giải thích):
 {{"check_in": "YYYY-MM-DD hoặc null", "check_out": "YYYY-MM-DD hoặc null", "guests": "số nguyên hoặc null", "room_type": "chuỗi hoặc null", "hotel_name": "chuỗi hoặc null"}}
@@ -353,12 +491,17 @@ def booking_node(state: BookingState) -> dict:
         }
 
     api_key = os.getenv("GEMINI_API_KEY")
-    client = genai.Client(api_key=api_key)
 
     # Bước 1: Trích xuất thông tin từ hội thoại
     info = _extract_booking_info(state, api_key)
-    check_in = info.get("check_in") or state.get("check_in")
-    check_out = info.get("check_out") or state.get("check_out")
+    local_info = _extract_local_booking_info(state)
+    latest_single_date_field = local_info.pop("_latest_single_date_field", None)
+    llm_check_out = info.get("check_out")
+    if latest_single_date_field == "check_in" and not local_info.get("check_out"):
+        llm_check_out = None
+
+    check_in = local_info.get("check_in") or info.get("check_in") or state.get("check_in")
+    check_out = local_info.get("check_out") or llm_check_out or state.get("check_out")
     guests = info.get("guests") or state.get("guests")
     room_type = info.get("room_type") or state.get("room_type")
     hotel_name = info.get("hotel_name") or state.get("hotel_name")
@@ -377,6 +520,22 @@ def booking_node(state: BookingState) -> dict:
         "pending_room_id": None,
         "booking_confirmed": False,
     }
+
+    date_error = _date_range_error(check_in, check_out)
+    if date_error:
+        if latest_single_date_field == "check_in":
+            updates["check_out"] = None
+            updates["messages"] = [AIMessage(content=_missing_date_message(check_in, None))]
+        else:
+            updates["messages"] = [
+                AIMessage(
+                    content=(
+                        f"{date_error}\n\n"
+                        "Bạn vui lòng gửi lại khoảng ngày đúng, ví dụ: **2026-06-12 - 2026-06-13**."
+                    )
+                )
+            ]
+        return updates
 
     if pending_room_id and _is_affirmative(last_human_message):
         updates["pending_room_id"] = pending_room_id
@@ -461,20 +620,7 @@ def booking_node(state: BookingState) -> dict:
 
     # Bước 2: Kiểm tra đủ thông tin tối thiểu (check_in + check_out) chưa
     if not check_in or not check_out:
-        # Chưa đủ → gọi LLM hỏi lại
-        prompt = BOOKING_PROMPT.format(
-            check_in=check_in or "chưa có",
-            check_out=check_out or "chưa có",
-            guests=guests or "chưa có",
-            room_type=room_type or "chưa có",
-            hotel_name=hotel_name or "chưa có"
-        )
-        history = "\n".join([f"{'User' if m.type == 'human' else 'Bot'}: {m.content}" for m in state["messages"]])
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{prompt}\n\nLịch sử:\n{history}"
-        )
-        updates["messages"] = [AIMessage(content=response.text)]
+        updates["messages"] = [AIMessage(content=_missing_date_message(check_in, check_out))]
         return updates
 
     # Bước 3: Đủ thông tin → Tìm phòng trống

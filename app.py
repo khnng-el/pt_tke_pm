@@ -19,7 +19,7 @@ import locale
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from config import DATABASE_URI, DB_AUTO_CREATE
+from config import DATABASE_URI, DB_AUTO_CREATE, USE_SQLITE
 from contextlib import contextmanager
 import secrets
 from flask_mail import Mail, Message
@@ -82,6 +82,18 @@ def format_price_filter(value):
 # Database setup
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+if USE_SQLITE:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        "connect_args": {"timeout": 30}
+    }
+else:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280,
+        "pool_size": 15,
+        "max_overflow": 25,
+        "pool_timeout": 30
+    }
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 

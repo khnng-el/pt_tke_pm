@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -46,12 +46,27 @@ USE_SQLITE = DATABASE_URI.startswith("sqlite")
 
 engine_kwargs = {"echo": False, "future": True}
 if USE_SQLITE:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 else:
     engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_recycle"] = 3600
+    engine_kwargs["pool_recycle"] = 280
+    engine_kwargs["pool_size"] = 15
+    engine_kwargs["max_overflow"] = 25
+    engine_kwargs["pool_timeout"] = 30
 
 engine = create_engine(DATABASE_URI, **engine_kwargs)
+
+if USE_SQLITE:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
+        finally:
+            cursor.close()
 
 db_session = scoped_session(
     sessionmaker(

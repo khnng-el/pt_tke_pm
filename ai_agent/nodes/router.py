@@ -5,9 +5,12 @@ Router Node: Phân loại ý định người dùng bằng LLM.
 import re
 import unicodedata
 from google import genai
-from langchain_core.messages import AIMessage
 from ai_agent.state import BookingState
 from ai_agent.prompts import ROUTER_PROMPT
+
+DATE_TOKEN_PATTERN = re.compile(
+    r"\b(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b"
+)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -25,10 +28,58 @@ def _previous_ai_text(state: BookingState) -> str:
     return ""
 
 
+def _contains_booking_date(text: str | None) -> bool:
+    return bool(DATE_TOKEN_PATTERN.search(text or ""))
+
+
+def _contains_booking_date_range(text: str | None) -> bool:
+    return len(DATE_TOKEN_PATTERN.findall(text or "")) >= 2
+
+
+def _asked_for_booking_dates(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return any(hint in normalized for hint in {
+        "check in",
+        "check out",
+        "ngay check in",
+        "ngay check out",
+        "ngay nhan phong",
+        "ngay tra phong",
+        "ngay den",
+        "ngay di",
+    })
+
+
+def _is_management_request(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return any(hint in normalized for hint in {
+        "booking cua toi",
+        "dat phong cua toi",
+        "don dat phong cua toi",
+        "kiem tra booking",
+        "kiem tra dat phong",
+        "kiem tra don dat phong",
+        "lich su booking",
+        "lich su dat phong",
+        "xem booking",
+        "xem dat phong",
+        "huy booking",
+        "huy dat phong",
+        "trang thai booking",
+        "trang thai dat phong",
+    })
+
+
 def _is_booking_followup(state: BookingState) -> bool:
     last_message = state["messages"][-1].content or ""
     normalized = _normalize_text(last_message)
     previous_ai = _previous_ai_text(state)
+
+    if _contains_booking_date_range(last_message):
+        return True
+
+    if _asked_for_booking_dates(previous_ai) and _contains_booking_date(last_message):
+        return True
 
     if "Xác nhận đặt phòng" in previous_ai:
         return normalized in {
@@ -51,15 +102,18 @@ def router_node(state: BookingState) -> dict:
     Gọi LLM để phân loại ý định (intent) từ tin nhắn mới nhất.
     Cập nhật state["intent"] = "booking" | "manage" | "faq" | "greeting"
     """
-    import os
-    api_key = os.getenv("GEMINI_API_KEY")
-    client = genai.Client(api_key=api_key)
-
     # Lấy tin nhắn mới nhất của người dùng
     last_message = state["messages"][-1].content
 
+    if _is_management_request(last_message):
+        return {"intent": "manage"}
+
     if _is_booking_followup(state):
         return {"intent": "booking"}
+
+    import os
+    api_key = os.getenv("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",

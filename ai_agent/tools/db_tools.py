@@ -122,6 +122,10 @@ STOPWORDS = {
     "the", "a", "an", "and", "or", "with", "for", "room", "rooms", "stay",
 }
 
+DATE_TOKEN_PATTERN = re.compile(
+    r"\b(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b"
+)
+
 
 def _normalize_text(value: str | None) -> str:
     value = value or ""
@@ -137,6 +141,31 @@ def _tokenize(value: str | None) -> set[str]:
         token for token in _normalize_text(value).split()
         if len(token) > 2 and token not in STOPWORDS
     }
+
+
+def _matching_hotel_ids(db, hotel_name: str | None) -> list[int]:
+    normalized_query = _normalize_text(hotel_name)
+    query_tokens = _tokenize(hotel_name)
+    if not normalized_query and not query_tokens:
+        return []
+
+    matched_ids = []
+    hotels = db.query(Hotel.hotel_id, Hotel.hotel_name).all()
+    for hotel_id, stored_name in hotels:
+        normalized_name = _normalize_text(stored_name)
+        name_tokens = _tokenize(stored_name)
+
+        if normalized_query and (
+            normalized_query in normalized_name
+            or normalized_name in normalized_query
+        ):
+            matched_ids.append(hotel_id)
+            continue
+
+        if query_tokens and query_tokens.issubset(name_tokens):
+            matched_ids.append(hotel_id)
+
+    return matched_ids
 
 
 def _detect_features(text: str | None) -> list[str]:
@@ -157,6 +186,7 @@ def _extract_price_limit(text: str | None) -> int | None:
     if not text:
         return None
 
+    text = DATE_TOKEN_PATTERN.sub(" ", text)
     value = unicodedata.normalize("NFD", text.lower())
     value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
     value = value.replace("đ", "d")
@@ -424,7 +454,7 @@ def search_available_rooms(check_in: str, check_out: str, guests: int = 1,
     if room_type:
         query = query.filter(Room.room_type.ilike(f"%{room_type}%"))
     if hotel_name:
-        query = query.filter(Hotel.hotel_name.ilike(f"%{hotel_name}%"))
+        query = query.filter(Hotel.hotel_id.in_(_matching_hotel_ids(db, hotel_name)))
     if max_price_per_night is not None:
         query = query.filter(Room.price <= max_price_per_night)
 
@@ -565,6 +595,45 @@ def get_booking_info(booking_id: int) -> dict:
         result["payment_method"] = booking.payment.payment_method
 
     return result
+
+
+def get_user_bookings(user_id: int, limit: int = 10) -> list[dict]:
+    """Lấy danh sách booking của user, gồm trạng thái booking và thanh toán."""
+    db = get_db()
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.user_id == user_id)
+        .order_by(Booking.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for booking in bookings:
+        payment = (
+            db.query(Payment)
+            .filter(Payment.booking_id == booking.booking_id)
+            .order_by(Payment.created_at.desc())
+            .first()
+        )
+        payment_status = payment.payment_status if payment and payment.payment_status else "pending"
+        payment_method = payment.payment_method if payment and payment.payment_method else None
+
+        results.append({
+            "booking_id": booking.booking_id,
+            "room_type": booking.room.room_type if booking.room else "Không rõ phòng",
+            "hotel_name": booking.room.hotel.hotel_name if booking.room and booking.room.hotel else "Không rõ khách sạn",
+            "check_in": booking.check_in.strftime("%Y-%m-%d") if booking.check_in else "",
+            "check_out": booking.check_out.strftime("%Y-%m-%d") if booking.check_out else "",
+            "total_price": booking.total_price,
+            "num_rooms": booking.num_rooms,
+            "status": booking.status,
+            "payment_status": payment_status,
+            "payment_method": payment_method,
+            "created_at": booking.created_at.strftime("%Y-%m-%d %H:%M") if booking.created_at else "",
+        })
+
+    return results
 
 
 def cancel_booking(booking_id: int, user_id: int) -> dict:

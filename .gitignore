@@ -7,3 +7,5 @@ __pycache__/
 *.pyd
 app.log
 hotel_management.db
+hotel_management.db-shm
+hotel_management.db-wal
